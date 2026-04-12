@@ -374,7 +374,124 @@ def build_dashboard_global(s):
     ]
     s.spreadsheets().batchUpdate(spreadsheetId=SHEET_ID, body={"requests": requests}).execute()
     _apply_conditional_formats(s, sid)
+    _add_cumulative_chart(s, sid)
     print(f"✅ Dashboard Global built ({DASH_TAB})")
+
+
+def _add_cumulative_chart(s, sid):
+    """Area chart: cumulative cash collecté vs cumulative spend over time."""
+    # Clear existing charts on this sheet first
+    meta = s.spreadsheets().get(spreadsheetId=SHEET_ID, ranges=[f"'{DASH_TAB}'!A1"],
+                                includeGridData=False).execute()
+    existing_charts = []
+    for sh in meta["sheets"]:
+        if sh["properties"]["sheetId"] == sid:
+            existing_charts = [c["chartId"] for c in sh.get("charts", [])]
+    reqs = [{"deleteEmbeddedObject": {"objectId": cid}} for cid in existing_charts]
+
+    # Build a small helper table at columns P-R for the chart (dates, cash cumul, spend cumul)
+    # Pull Data_Funnel_Follow and Data_Funnel_VSL dates + values
+    # Use a QUERY union via ARRAYFORMULA
+
+    # Simpler: write formulas that aggregate by date across both funnels
+    helper_header = [["Date", "Spend cumul (€)", "Cash cumul (€)"]]
+    s.spreadsheets().values().update(
+        spreadsheetId=SHEET_ID, range=f"'{DASH_TAB}'!P1",
+        valueInputOption="RAW", body={"values": helper_header},
+    ).execute()
+    # Formula in P2: unique sorted dates from both sheets
+    helper_formula = [[
+        "=SORT(UNIQUE({FILTER('Data_Funnel_Follow'!A2:A,'Data_Funnel_Follow'!A2:A<>\"\");"
+        "FILTER('Data_Funnel_VSL'!A2:A,'Data_Funnel_VSL'!A2:A<>\"\")}),1,TRUE)"
+    ]]
+    s.spreadsheets().values().update(
+        spreadsheetId=SHEET_ID, range=f"'{DASH_TAB}'!P2",
+        valueInputOption="USER_ENTERED", body={"values": helper_formula},
+    ).execute()
+
+    # Q2 = cumulative spend, R2 = cumulative cash (ARRAYFORMULA with running sum is tricky,
+    # use plain formulas for 200 rows)
+    q_formulas = []
+    r_formulas = []
+    for i in range(2, 202):
+        q_formulas.append([
+            f"=IF(P{i}=\"\",\"\","
+            f"SUMIFS('Data_Funnel_Follow'!B:B,'Data_Funnel_Follow'!A:A,\"<=\"&P{i})"
+            f"+SUMIFS('Data_Funnel_VSL'!B:B,'Data_Funnel_VSL'!A:A,\"<=\"&P{i}))"
+        ])
+        r_formulas.append([
+            f"=IF(P{i}=\"\",\"\","
+            f"SUMIFS('Data_Funnel_Follow'!V:V,'Data_Funnel_Follow'!A:A,\"<=\"&P{i})"
+            f"+SUMIFS('Data_Funnel_VSL'!U:U,'Data_Funnel_VSL'!A:A,\"<=\"&P{i}))"
+        ])
+    s.spreadsheets().values().update(
+        spreadsheetId=SHEET_ID, range=f"'{DASH_TAB}'!Q2:Q201",
+        valueInputOption="USER_ENTERED", body={"values": q_formulas},
+    ).execute()
+    s.spreadsheets().values().update(
+        spreadsheetId=SHEET_ID, range=f"'{DASH_TAB}'!R2:R201",
+        valueInputOption="USER_ENTERED", body={"values": r_formulas},
+    ).execute()
+
+    # Hide helper columns P-R from casual view
+    reqs.append({
+        "updateDimensionProperties": {
+            "range": {"sheetId": sid, "dimension": "COLUMNS", "startIndex": 15, "endIndex": 18},
+            "properties": {"hiddenByUser": True},
+            "fields": "hiddenByUser",
+        }
+    })
+
+    # Add chart
+    reqs.append({
+        "addChart": {
+            "chart": {
+                "spec": {
+                    "title": "Cumul Cash Collecté vs Spend",
+                    "basicChart": {
+                        "chartType": "AREA",
+                        "legendPosition": "BOTTOM_LEGEND",
+                        "axis": [
+                            {"position": "BOTTOM_AXIS", "title": "Date"},
+                            {"position": "LEFT_AXIS", "title": "€"},
+                        ],
+                        "domains": [{"domain": {"sourceRange": {"sources": [{
+                            "sheetId": sid,
+                            "startRowIndex": 0, "endRowIndex": 201,
+                            "startColumnIndex": 15, "endColumnIndex": 16,
+                        }]}}}],
+                        "series": [
+                            {"series": {"sourceRange": {"sources": [{
+                                "sheetId": sid,
+                                "startRowIndex": 0, "endRowIndex": 201,
+                                "startColumnIndex": 16, "endColumnIndex": 17,
+                            }]}},
+                             "targetAxis": "LEFT_AXIS",
+                             "color": {"red": 0.9, "green": 0.4, "blue": 0.3}},
+                            {"series": {"sourceRange": {"sources": [{
+                                "sheetId": sid,
+                                "startRowIndex": 0, "endRowIndex": 201,
+                                "startColumnIndex": 17, "endColumnIndex": 18,
+                            }]}},
+                             "targetAxis": "LEFT_AXIS",
+                             "color": {"red": 0.3, "green": 0.7, "blue": 0.4}},
+                        ],
+                        "headerCount": 1,
+                        "stackedType": "NOT_STACKED",
+                    },
+                },
+                "position": {
+                    "overlayPosition": {
+                        "anchorCell": {"sheetId": sid, "rowIndex": 25, "columnIndex": 0},
+                        "offsetXPixels": 0, "offsetYPixels": 10,
+                        "widthPixels": 900, "heightPixels": 360,
+                    }
+                },
+            }
+        }
+    })
+
+    s.spreadsheets().batchUpdate(spreadsheetId=SHEET_ID, body={"requests": reqs}).execute()
 
 
 def _cf_rule(sid, start_row, end_row, start_col, end_col, formula, bg):

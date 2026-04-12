@@ -100,22 +100,25 @@ def build_dashboard_global(s):
         [""] * 8,
         # KPI row 1 labels
         ["Spend Total (€)", "Cash Collecté (€)", "ROAS", "CAC (€)", "", "", "", ""],
-        # KPI row 1 values (use RAW sheets directly as source of truth)
+        # KPI row 1 values — BASE sheets (Data_Funnel_*) are source of truth for aggregates
+        # Cash = VSL!U + Follow!V | Ventes = VSL!R + Follow!S
         [
-            "=SUMIFS('Meta_Ads_Raw_VSL'!B:B,'Meta_Ads_Raw_VSL'!A:A,\">=\"&$B$3) + SUMIFS('Meta_Ads_Raw'!B:B,'Meta_Ads_Raw'!A:A,\">=\"&$B$3)",
-            "=SUMIFS('Data_Closing'!J:J,'Data_Closing'!A:A,\">=\"&$B$3)",
+            "=SUMIFS('Data_Funnel_VSL'!B:B,'Data_Funnel_VSL'!A:A,\">=\"&$B$3) + SUMIFS('Data_Funnel_Follow'!B:B,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
+            "=SUMIFS('Data_Funnel_VSL'!U:U,'Data_Funnel_VSL'!A:A,\">=\"&$B$3) + SUMIFS('Data_Funnel_Follow'!V:V,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
             "=IFERROR(B6/A6, 0)",
-            "=IFERROR(A6/SUMIFS('Data_Closing'!H:H,'Data_Closing'!A:A,\">=\"&$B$3), 0)",
+            "=IFERROR(A6/(SUMIFS('Data_Funnel_VSL'!R:R,'Data_Funnel_VSL'!A:A,\">=\"&$B$3)+SUMIFS('Data_Funnel_Follow'!S:S,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)), 0)",
             "", "", "", "",
         ],
         [""] * 8,
         # KPI row 2 labels
         ["Ventes", "Calls Reçus", "Show Rate (%)", "Close Rate (%)", "", "", "", ""],
         # KPI row 2 values
+        # Ventes = VSL!R + Follow!S | Calls Reçus = VSL!P + Follow!Q
+        # Calls Bookés = VSL!N + Follow!O | Show Rate = Calls Reçus / Calls Bookés | Close = Ventes/Reçus
         [
-            "=SUMIFS('Data_Closing'!H:H,'Data_Closing'!A:A,\">=\"&$B$3)",
-            "=SUMIFS('Data_Closing'!E:E,'Data_Closing'!A:A,\">=\"&$B$3)",
-            "=IFERROR(SUMIFS('Data_Closing'!E:E,'Data_Closing'!A:A,\">=\"&$B$3)/SUMIFS('Data_Closing'!D:D,'Data_Closing'!A:A,\">=\"&$B$3)*100, 0)",
+            "=SUMIFS('Data_Funnel_VSL'!R:R,'Data_Funnel_VSL'!A:A,\">=\"&$B$3) + SUMIFS('Data_Funnel_Follow'!S:S,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
+            "=SUMIFS('Data_Funnel_VSL'!P:P,'Data_Funnel_VSL'!A:A,\">=\"&$B$3) + SUMIFS('Data_Funnel_Follow'!Q:Q,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
+            "=IFERROR(B9/(SUMIFS('Data_Funnel_VSL'!N:N,'Data_Funnel_VSL'!A:A,\">=\"&$B$3)+SUMIFS('Data_Funnel_Follow'!O:O,'Data_Funnel_Follow'!A:A,\">=\"&$B$3))*100, 0)",
             "=IFERROR(A9/B9*100, 0)",
             "", "", "", "",
         ],
@@ -134,20 +137,20 @@ def build_dashboard_global(s):
             "=SUMIFS('Meta_Ads_Raw'!C:C,'Meta_Ads_Raw'!A:A,\">=\"&$B$3)",
             "=B16+C16", "", "", "", ""],
         ["Calls Bookés",
-            "=SUMIFS('Data_Closing'!D:D,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"VSL\")",
-            "=SUMIFS('Data_Closing'!D:D,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"Follow\")",
+            "=SUMIFS('Data_Funnel_VSL'!N:N,'Data_Funnel_VSL'!A:A,\">=\"&$B$3)",
+            "=SUMIFS('Data_Funnel_Follow'!O:O,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
             "=B17+C17", "", "", "", ""],
         ["Calls Reçus",
-            "=SUMIFS('Data_Closing'!E:E,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"VSL\")",
-            "=SUMIFS('Data_Closing'!E:E,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"Follow\")",
+            "=SUMIFS('Data_Funnel_VSL'!P:P,'Data_Funnel_VSL'!A:A,\">=\"&$B$3)",
+            "=SUMIFS('Data_Funnel_Follow'!Q:Q,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
             "=B18+C18", "", "", "", ""],
         ["Ventes",
-            "=SUMIFS('Data_Closing'!H:H,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"VSL\")",
-            "=SUMIFS('Data_Closing'!H:H,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"Follow\")",
+            "=SUMIFS('Data_Funnel_VSL'!R:R,'Data_Funnel_VSL'!A:A,\">=\"&$B$3)",
+            "=SUMIFS('Data_Funnel_Follow'!S:S,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
             "=B19+C19", "", "", "", ""],
         ["Cash Collecté (€)",
-            "=SUMIFS('Data_Closing'!J:J,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"VSL\")",
-            "=SUMIFS('Data_Closing'!J:J,'Data_Closing'!A:A,\">=\"&$B$3,'Data_Closing'!C:C,\"Follow\")",
+            "=SUMIFS('Data_Funnel_VSL'!U:U,'Data_Funnel_VSL'!A:A,\">=\"&$B$3)",
+            "=SUMIFS('Data_Funnel_Follow'!V:V,'Data_Funnel_Follow'!A:A,\">=\"&$B$3)",
             "=B20+C20", "", "", "", ""],
         ["ROAS",
             "=IFERROR(B20/B15, 0)", "=IFERROR(C20/C15, 0)", "=IFERROR(D20/D15, 0)",

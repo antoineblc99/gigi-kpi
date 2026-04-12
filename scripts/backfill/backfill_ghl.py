@@ -16,6 +16,14 @@ CALENDARS = {
     "Follow": "AQ8RmdYw7iyru79Axymf",
     "Bienvenue": "BCghpu5fgGfkROyaQge5",
 }
+SURVEY_ID = "QMdJpJZx7K7Tl1oWieVw"  # post-VSL qualif
+SURVEY_FIELDS = {
+    "niveau": "uWAx6YVe9C7PLmbua9UK",
+    "when": "xDZKCaL8xU8flukqPE2Y",
+    "time": "CmbhN557vuouOm8YhgK1",
+    "budget": "tPfOEWPCDMZYCY9clgl9",
+    "motivation": "KYfJdtLGHCrqvRlNrRJt",
+}
 TIMEZONE = "Europe/Paris"
 
 
@@ -148,15 +156,91 @@ def row_optin(day_iso: str, c: dict) -> list:
     ]
 
 
+# ---------- Surveys ----------
+
+def fetch_survey_submissions(key: str, start: date, end: date) -> list[dict]:
+    """Fetch all submissions for the VSL qualif survey and filter client-side by date range."""
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Version": "2021-07-28",
+        "Accept": "application/json",
+    }
+    out: list[dict] = []
+    page = 1
+    start_ms, _ = day_bounds_ms(start)
+    _, end_ms = day_bounds_ms(end)
+    while True:
+        r = requests.get(
+            f"{GHL_BASE}/surveys/submissions",
+            headers=headers,
+            params={"locationId": LOCATION_ID, "surveyId": SURVEY_ID, "limit": 100, "page": page},
+            timeout=30,
+        )
+        if r.status_code != 200:
+            raise RuntimeError(f"GHL surveys/submissions {r.status_code}: {r.text[:400]}")
+        data = r.json()
+        subs = data.get("submissions", [])
+        if not subs:
+            break
+        out.extend(subs)
+        meta = data.get("meta", {})
+        if not meta.get("nextPage"):
+            break
+        page = meta["nextPage"]
+        if page > 50:
+            break
+    # Client-side filter by date
+    filtered = []
+    for s in out:
+        ts = s.get("createdAt") or s.get("others", {}).get("createdAt")
+        if not ts:
+            continue
+        try:
+            sub_ms = int(parse_date(ts).timestamp() * 1000)
+        except Exception:
+            continue
+        if start_ms <= sub_ms <= end_ms:
+            filtered.append(s)
+    return filtered
+
+
+def _survey_answer(others: dict, field_id: str) -> str:
+    val = others.get(field_id)
+    if isinstance(val, list):
+        return ", ".join(str(v) for v in val)
+    return str(val) if val else ""
+
+
+def row_survey(s: dict) -> list:
+    others = s.get("others") or {}
+    created = s.get("createdAt") or others.get("createdAt") or ""
+    try:
+        day_iso = parse_date(str(created)).date().isoformat()
+    except Exception:
+        day_iso = ""
+    disqualified = bool(others.get("disqualified"))
+    return [
+        day_iso,
+        s.get("email", "") or others.get("email", ""),
+        _survey_answer(others, SURVEY_FIELDS["niveau"]),
+        _survey_answer(others, SURVEY_FIELDS["when"]),
+        _survey_answer(others, SURVEY_FIELDS["time"]),
+        _survey_answer(others, SURVEY_FIELDS["budget"]),
+        _survey_answer(others, SURVEY_FIELDS["motivation"]),
+        "Non" if disqualified else "Oui",
+        created,
+    ]
+
+
 # ---------- Sheet I/O ----------
 
-def append_rows(sheets, tab: str, rows: list[list]) -> int:
+def append_rows(sheets, tab: str, rows: list[list], value_input: str = "USER_ENTERED") -> int:
     if not rows:
         return 0
     sheets.spreadsheets().values().append(
         spreadsheetId=SHEET_ID,
         range=f"{tab}!A1",
-        valueInputOption="USER_ENTERED",
+        valueInputOption=value_input,
         insertDataOption="INSERT_ROWS",
         body={"values": rows},
     ).execute()
@@ -177,6 +261,9 @@ def daterange(start: date, end: date) -> Iterable[date]:
         d += timedelta(days=1)
 
 
+from dateutil.parser import parse as parse_date  # noqa: E402 (used in survey fn)
+
+
 # ---------- Main ----------
 
 def run(start: date, end: date, force: bool = False) -> None:
@@ -188,6 +275,14 @@ def run(start: date, end: date, force: bool = False) -> None:
 
     calls_rows: list[list] = []
     optins_rows: list[list] = []
+    survey_rows: list[list] = []
+
+    # Surveys: fetch once for the full range (small dataset, no need to iterate days)
+    try:
+        subs = fetch_survey_submissions(key, start, end)
+        survey_rows = [row_survey(s) for s in subs]
+    except RuntimeError as err:
+        print(f"surveys error: {err}")
 
     for d in daterange(start, end):
         day_iso = d.isoformat()
@@ -216,7 +311,8 @@ def run(start: date, end: date, force: bool = False) -> None:
 
     n1 = append_rows(sheets, "GHL_Calls_Raw", calls_rows)
     n2 = append_rows(sheets, "GHL_Optins_Raw", optins_rows)
-    print(f"✅ Calls +{n1} | Opt-ins +{n2}")
+    n3 = append_rows(sheets, "GHL_Surveys_Raw", survey_rows, value_input="RAW")
+    print(f"✅ Calls +{n1} | Opt-ins +{n2} | Surveys +{n3}")
 
 
 if __name__ == "__main__":

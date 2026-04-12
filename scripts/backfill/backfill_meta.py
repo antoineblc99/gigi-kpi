@@ -14,6 +14,7 @@ META_BASE = "https://graph.facebook.com/v21.0"
 
 CAMPAIGN_VSL = "120243478827620073"
 CAMPAIGN_FOLLOW = "120241957177570073"
+IG_USER_ID = "17841448640931967"  # giginails77
 ADSETS = {
     "vsl_broad": "120243478853250073",
     "vsl_retargeting": "120243478850530073",
@@ -96,17 +97,52 @@ def daterange(start: date, end: date) -> Iterable[date]:
         d += timedelta(days=1)
 
 
+def fetch_ig_new_followers(start: date, end: date) -> dict[str, int]:
+    """Return {yyyy-mm-dd: new_followers_count} from IG insights.
+    IG API limits to last 30 days excluding today, so dates outside that window return 0.
+    """
+    today = date.today()
+    earliest = today - timedelta(days=30)
+    yesterday = today - timedelta(days=1)
+    effective_start = max(start, earliest)
+    effective_end = min(end, yesterday)
+    if effective_start > effective_end:
+        return {}
+
+    out: dict[str, int] = {}
+    data = meta_get(f"{IG_USER_ID}/insights", {
+        "metric": "follower_count",
+        "period": "day",
+        "since": effective_start.isoformat(),
+        "until": effective_end.isoformat(),
+    })
+    for item in data.get("data", []):
+        if item.get("name") != "follower_count":
+            continue
+        for v in item.get("values", []):
+            ts = v.get("end_time", "")[:10]
+            if ts:
+                out[ts] = int(v.get("value", 0) or 0)
+    return out
+
+
+def fetch_ig_total_followers() -> int:
+    data = meta_get(IG_USER_ID, {"fields": "followers_count"})
+    return int(data.get("followers_count", 0) or 0)
+
+
 def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
 # ---------- Row builders aligned to sheet headers ----------
 
-def row_follow_campaign(day: str, r: dict) -> list:
+def row_follow_campaign(day: str, r: dict, new_followers: int, ig_total: int) -> list:
     """Meta_Ads_Raw (15 cols): Date|Spend|Imp|Clicks|CPM|CPC|CTR|Reach|Followers|PV|Results|Cost/Result|Cost/Follower|Last Updated|IG Total"""
     spend = float(r.get("spend", 0) or 0)
     profile_visits = action_value(r, ACT_LINK_CLICK)
     cost_pv = cost_per_action(r, ACT_LINK_CLICK)
+    cost_per_follower = round(spend / new_followers, 2) if new_followers > 0 else ""
     return [
         day,
         spend,
@@ -116,13 +152,13 @@ def row_follow_campaign(day: str, r: dict) -> list:
         float(r.get("cpc", 0) or 0),
         float(r.get("ctr", 0) or 0),
         int(r.get("reach", 0) or 0),
-        "",  # Followers (pas dispo via Meta Ads API)
+        new_followers,
         profile_visits,
         profile_visits,  # Results = link_click pour campagne OUTCOME_TRAFFIC
         cost_pv,  # Cost/Result
-        "",  # Cost/Follower (pas dispo)
+        cost_per_follower,
         now_iso(),
-        "",  # IG Total Followers (requiert IG Graph API)
+        ig_total,
     ]
 
 
@@ -229,6 +265,14 @@ def existing_days(sheets, tab: str) -> set[str]:
 def run(start: date, end: date, force: bool = False) -> None:
     sheets = get_sheets_service()
 
+    # IG follower data (fetched once for the whole range)
+    try:
+        ig_new = fetch_ig_new_followers(start, end)
+        ig_total = fetch_ig_total_followers()
+    except RuntimeError as err:
+        print(f"IG insights error: {err} — using 0")
+        ig_new, ig_total = {}, 0
+
     follow_done = set() if force else existing_days(sheets, "Meta_Ads_Raw")
     vsl_done = set() if force else existing_days(sheets, "Meta_Ads_Raw_VSL")
     adset_done = set() if force else existing_days(sheets, "AdSet_Raw")
@@ -243,7 +287,7 @@ def run(start: date, end: date, force: bool = False) -> None:
         if day not in follow_done:
             for r in insights(CAMPAIGN_FOLLOW, day, "campaign", FIELDS_CAMPAIGN):
                 if float(r.get("spend", 0) or 0) > 0:
-                    follow_rows.append(row_follow_campaign(day, r))
+                    follow_rows.append(row_follow_campaign(day, r, ig_new.get(day, 0), ig_total))
 
         if day not in vsl_done:
             for r in insights(CAMPAIGN_VSL, day, "campaign", FIELDS_CAMPAIGN):

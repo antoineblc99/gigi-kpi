@@ -36,13 +36,14 @@ def main():
         if iso:
             meta_by_date[iso] = row
 
-    # 2. Read manual historical data from DashBoard_Funnel_Follow (V7:AD37)
-    # Cols: V=Date, W=Spend(formula), X=NewFol(formula), Y=Conv, Z=Liens, AA=AppelsResrv, AB=AppelsRecus, AC=Ventes, AD=CA
+    # 2. Manual historical data — March block (V7:AD37)
+    # Cols: V=Date, W=Spend, X=NewFol, Y=Conv, Z=Liens, AA=AppelsResrv, AB=AppelsRecus, AC=Ventes, AD=CA
+    manual_by_date = {}
+
     r = s.spreadsheets().values().get(
         spreadsheetId=SHEET_ID, range="DashBoard_Funnel_Follow!V7:AD37",
         valueRenderOption="UNFORMATTED_VALUE", dateTimeRenderOption="SERIAL_NUMBER",
     ).execute()
-    manual_by_date = {}
     for row in r.get("values", []):
         if not row or not row[0]:
             continue
@@ -57,6 +58,28 @@ def main():
             "ca": vals[8] or 0,
         }
 
+    # 2b. Manual historical data — April block (AG7:AO37)
+    # Cols: AG=Date, AH=Spend, AI=NewFol, AJ=Conv, AK=Liens, AL=Bookés, AM=Reçus, AN=Ventes, AO=Cash
+    r = s.spreadsheets().values().get(
+        spreadsheetId=SHEET_ID, range="DashBoard_Funnel_Follow!AG7:AO37",
+        valueRenderOption="UNFORMATTED_VALUE", dateTimeRenderOption="SERIAL_NUMBER",
+    ).execute()
+    for row in r.get("values", []):
+        if not row or not row[0]:
+            continue
+        iso = to_iso(row[0])
+        vals = row + [""] * (9 - len(row))
+        # Merge: keep non-empty values (April block has same columns as March)
+        existing = manual_by_date.get(iso, {})
+        manual_by_date[iso] = {
+            "conversations": vals[3] if vals[3] not in ("", None) else existing.get("conversations", 0),
+            "liens_envoyes": vals[4] if vals[4] not in ("", None) else existing.get("liens_envoyes", 0),
+            "appels_reserves": vals[5] if vals[5] not in ("", None) else existing.get("appels_reserves", 0),
+            "appels_recus": vals[6] if vals[6] not in ("", None) else existing.get("appels_recus", 0),
+            "ventes": vals[7] if vals[7] not in ("", None) else existing.get("ventes", 0),
+            "ca": vals[8] if vals[8] not in ("", None) else existing.get("ca", 0),
+        }
+
     # 3. Build rebuilt rows for every date that has either meta or manual data
     all_dates = sorted(set(list(meta_by_date.keys()) + list(manual_by_date.keys())))
 
@@ -64,6 +87,12 @@ def main():
     for iso in all_dates:
         m = meta_by_date.get(iso)
         mn = manual_by_date.get(iso, {})
+
+        # Skip rows that have neither meta data nor any manual data
+        has_meta = m is not None and any(str(x).strip() and str(x).strip() != "0" for x in m[1:])
+        has_manual = any((mn.get(k) or 0) for k in ("conversations", "liens_envoyes", "appels_reserves", "appels_recus", "ventes", "ca"))
+        if not has_meta and not has_manual:
+            continue
 
         spend = float(m[1]) if m and m[1] not in ("", None) else 0
         impressions = int(m[2]) if m and m[2] not in ("", None) else 0

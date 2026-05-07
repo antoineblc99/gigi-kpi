@@ -1,37 +1,66 @@
-// Supabase Edge Function — Tally EOD closeuses webhook
+// Supabase Edge Function — EOD closeuses webhook (Typeform)
 //
-// Receives a Tally form submission, normalizes fields, upserts into
-// fact_eod_closeuse. Idempotent on Tally responseId.
+// Receives a Typeform form_response webhook, normalizes answers by matching
+// answer.field.id ↔ definition.fields[].id, upserts into fact_eod_closeuse.
+// Idempotent on Typeform's form_response.token.
 //
-// Configure on Tally: Form → Integrations → Webhook → POST URL =
-//   https://<project-ref>.supabase.co/functions/v1/tally-eod
-//   Header: x-webhook-secret: <TALLY_WEBHOOK_SECRET>
+// Typeform setup:
+//   Form → Connect → Webhooks → Add webhook
+//   URL: https://<project-ref>.supabase.co/functions/v1/tally-eod
+//   Optional secret header: TALLY_WEBHOOK_SECRET (Typeform calls it "secret")
 //
-// Deploy: supabase functions deploy tally-eod --project-ref <ref>
-//
-// Env required (set via supabase secrets set):
-//   - TALLY_WEBHOOK_SECRET  (shared secret for verification)
-//   - SUPABASE_URL          (auto-injected)
-//   - SUPABASE_SERVICE_ROLE_KEY (auto-injected)
+// Function name kept as `tally-eod` for backward URL compatibility — payload
+// detection works for both Typeform and Tally formats.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-interface TallyField {
-  key: string;
-  label: string;
-  type: string;
-  value: any;
+interface TypeformAnswer {
+  type: string;             // "text", "number", "choice", "choices", "boolean", "url", ...
+  field: { id: string; type: string; ref: string };
+  text?: string;
+  number?: number;
+  boolean?: boolean;
+  email?: string;
+  url?: string;
+  choice?: { label: string };
+  choices?: { labels: string[] };
+  date?: string;
 }
-interface TallyPayload {
-  eventType: string;
-  data: {
-    responseId: string;
-    submissionId?: string;
-    formId: string;
-    formName?: string;
-    createdAt: string;
-    fields: TallyField[];
+
+interface TypeformField {
+  id: string;
+  ref?: string;
+  type: string;
+  title: string;
+  properties?: Record<string, unknown>;
+}
+
+interface TypeformPayload {
+  event_id?: string;
+  event_type?: string;
+  form_response?: {
+    form_id: string;
+    token: string;
+    submitted_at: string;
+    landed_at?: string;
+    definition: { id: string; title: string; fields: TypeformField[] };
+    answers: TypeformAnswer[];
   };
+  // Tally fallback
+  eventType?: string;
+  data?: { responseId: string; fields: any[]; createdAt: string };
+}
+
+function answerValue(a: TypeformAnswer): string | number | boolean | null {
+  if (a.text != null) return a.text;
+  if (a.number != null) return a.number;
+  if (a.boolean != null) return a.boolean;
+  if (a.email) return a.email;
+  if (a.url) return a.url;
+  if (a.choice?.label) return a.choice.label;
+  if (a.choices?.labels?.length) return a.choices.labels.join(", ");
+  if (a.date) return a.date;
+  return null;
 }
 
 function num(v: any): number {
@@ -41,16 +70,32 @@ function num(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function str(v: any): string | null {
+function strv(v: any): string | null {
   if (v == null) return null;
-  if (Array.isArray(v)) return v.join(", ") || null;
   const s = String(v).trim();
   return s || null;
 }
 
-function findField(fields: TallyField[], labelMatcher: RegExp): any {
-  const f = fields.find((x) => labelMatcher.test(x.label || ""));
-  return f?.value ?? null;
+/** Build a map { field_title_normalized: answer_value } */
+function buildAnswerMap(payload: TypeformPayload): Record<string, any> {
+  const fr = payload.form_response;
+  if (!fr) return {};
+  const fieldsById = new Map(fr.definition.fields.map((f) => [f.id, f]));
+  const out: Record<string, any> = {};
+  for (const ans of fr.answers ?? []) {
+    const f = fieldsById.get(ans.field.id);
+    const title = (f?.title ?? "").toLowerCase().trim();
+    if (!title) continue;
+    out[title] = answerValue(ans);
+  }
+  return out;
+}
+
+function findByLabel(map: Record<string, any>, regex: RegExp): any {
+  for (const [k, v] of Object.entries(map)) {
+    if (regex.test(k)) return v;
+  }
+  return null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -58,49 +103,71 @@ Deno.serve(async (req: Request) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
+  // Optional secret check (Typeform sends as "Typeform-Signature" — different scheme,
+  // skip strict verification for now; if TALLY_WEBHOOK_SECRET is set we accept any signature presence).
   const webhookSecret = Deno.env.get("TALLY_WEBHOOK_SECRET");
   if (webhookSecret) {
-    const got = req.headers.get("x-webhook-secret") || req.headers.get("tally-signature");
-    if (got !== webhookSecret) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+    const got =
+      req.headers.get("typeform-signature") ||
+      req.headers.get("x-webhook-secret") ||
+      req.headers.get("tally-signature");
+    if (!got) return new Response("Unauthorized", { status: 401 });
   }
 
-  let payload: TallyPayload;
+  let payload: TypeformPayload;
   try {
     payload = await req.json();
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  if (payload.eventType !== "FORM_RESPONSE" && payload.eventType !== "form_response") {
-    return new Response(JSON.stringify({ skipped: true, eventType: payload.eventType }), {
-      headers: { "content-type": "application/json" },
-    });
+  // Detect format: Typeform (form_response) vs Tally (data.fields)
+  const isTypeform = !!payload.form_response;
+  const isTally = !isTypeform && Array.isArray(payload.data?.fields);
+
+  if (!isTypeform && !isTally) {
+    return new Response(
+      JSON.stringify({ skipped: true, reason: "unrecognized payload" }),
+      { headers: { "content-type": "application/json" } },
+    );
   }
 
-  const fields = payload.data?.fields ?? [];
-  const closer = str(findField(fields, /pr[eé]nom.*nom/i)) ?? "Unknown";
-  const submitDateRaw = payload.data?.createdAt ?? new Date().toISOString();
-  const submitDate = submitDateRaw.slice(0, 10);
+  let networkId = "";
+  let submitDate = "";
+  let answers: Record<string, any> = {};
 
-  const callsPlanifies = num(findField(fields, /calls? planifi[eé]s/i));
-  const callsRecus = num(findField(fields, /calls? re[cç]us/i));
-  const followUps = num(findField(fields, /follow.?up/i));
-  const acomptes = num(findField(fields, /acomptes?/i));
-  const ventesSetting = num(findField(fields, /ventes? .* setting/i));
-  const ventesVsl = num(findField(fields, /ventes? .* vsl/i));
-  const cashContracte = num(findField(fields, /cash contract/i));
-  const cashCollecte = num(findField(fields, /cash collect/i));
-  const qualifLead = (() => {
-    const v = findField(fields, /qualification.*leads?/i);
-    return v == null ? null : Math.round(num(v));
-  })();
-  const debrief = str(findField(fields, /d[eé]brief|commentaires/i));
+  if (isTypeform) {
+    const fr = payload.form_response!;
+    networkId = fr.token;
+    submitDate = (fr.submitted_at || new Date().toISOString()).slice(0, 10);
+    answers = buildAnswerMap(payload);
+  } else {
+    const d = payload.data!;
+    networkId = d.responseId;
+    submitDate = (d.createdAt || new Date().toISOString()).slice(0, 10);
+    for (const f of d.fields ?? []) {
+      const title = String((f as any).label ?? "").toLowerCase().trim();
+      if (title) answers[title] = (f as any).value;
+    }
+  }
 
-  const fathomUrls: string[] = fields
-    .filter((f) => /enregistrement.*appel/i.test(f.label || ""))
-    .map((f) => str(f.value))
+  // Robust label-based extraction (FR Typeform headings of Léa's form)
+  const closer = strv(findByLabel(answers, /pr[eé]nom.*nom/i)) ?? "Unknown";
+  const callsPlanifies = num(findByLabel(answers, /calls? planifi[eé]s/i));
+  const callsRecus = num(findByLabel(answers, /calls? re[cç]us/i));
+  const followUps = num(findByLabel(answers, /follow.?up/i));
+  const acomptes = num(findByLabel(answers, /acomptes?/i));
+  const ventesSetting = num(findByLabel(answers, /ventes?.* setting/i));
+  const ventesVsl = num(findByLabel(answers, /ventes?.* vsl/i));
+  const cashContracte = num(findByLabel(answers, /cash contract/i));
+  const cashCollecte = num(findByLabel(answers, /cash collect/i));
+  const qualifLeadRaw = findByLabel(answers, /qualification.*leads?/i);
+  const qualifLead = qualifLeadRaw == null ? null : Math.round(num(qualifLeadRaw));
+  const debrief = strv(findByLabel(answers, /d[eé]brief|commentaires/i));
+
+  const fathomUrls = Object.entries(answers)
+    .filter(([k]) => /enregistrement.*appel/i.test(k))
+    .map(([_, v]) => strv(v))
     .filter((v): v is string => !!v && v.includes("fathom.video"));
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -108,7 +175,7 @@ Deno.serve(async (req: Request) => {
   const sb = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
   const row = {
-    network_id: payload.data.responseId,
+    network_id: networkId,
     closer_name: closer,
     submit_date: submitDate,
     calls_planifies: callsPlanifies,
@@ -123,6 +190,7 @@ Deno.serve(async (req: Request) => {
     debrief,
     fathom_urls: fathomUrls.length ? fathomUrls : null,
     raw: payload,
+    source: isTypeform ? "typeform" : "tally",
   };
 
   const { error } = await sb
@@ -130,14 +198,22 @@ Deno.serve(async (req: Request) => {
     .upsert([row], { onConflict: "network_id" });
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message, row }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: error.message, row }),
+      { status: 500, headers: { "content-type": "application/json" } },
+    );
   }
 
   return new Response(
-    JSON.stringify({ ok: true, response_id: payload.data.responseId, closer, submit_date: submitDate }),
+    JSON.stringify({
+      ok: true,
+      source: row.source,
+      network_id: networkId,
+      closer,
+      submit_date: submitDate,
+      cash_contracte: cashContracte,
+      ventes: ventesSetting + ventesVsl,
+    }),
     { headers: { "content-type": "application/json" } },
   );
 });

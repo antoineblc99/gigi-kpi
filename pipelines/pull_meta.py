@@ -187,7 +187,14 @@ def pull_insights(meta: MetaClient, account_id: str, since: date, until: date,
                 actions = r.get("actions") or []
                 cpa = r.get("cost_per_action_type") or []
                 lpv = to_int(action_value(r, "actions", ACT_LPV))
-                followers_ig = to_int(action_value(r, "actions", "onsite_conversion.follow"))
+                # followers_ig: Meta /insights API does NOT expose IG follower count nor
+                # profile_visit_view at the actions level (only available in Ads Manager UI
+                # via a separate breakdown). For Follow funnel macro tracking, use LPV as
+                # weak proxy or pull Instagram Graph API followers_count delta separately.
+                # TODO: integrate IG Graph /me/business_discovery for daily follower delta.
+                followers_ig = to_int(action_value(r, "actions", "profile_visit_view"))
+                # VSL custom Pixel events come back as offsite_conversion.custom.{id}.
+                # IDs configured in .env.local META_EVENT_VSL_OPTIN / META_EVENT_VSL_CALL_BOOKED.
                 vsl_optin = to_int(action_value(r, "actions", event_optin))
                 vsl_call_booked = to_int(action_value(r, "actions", event_call_booked))
                 # results = volume de l'event "principal" de la campagne (objective-driven).

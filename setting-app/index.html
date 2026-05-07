@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setting Pipeline — Gigi Academy</title>
+<style>
+  :root {
+    --bg: #faf8f5;
+    --ink: #1a1614;
+    --coral: #ff5a4d;
+    --coral-soft: #ffe8e5;
+    --espresso: #3d2f24;
+    --muted: #8a7d72;
+    --line: #e8e2db;
+    --green: #2d8659;
+    --green-soft: #e0f0e8;
+    --amber: #c97f1e;
+    --amber-soft: #faf0e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 16px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 0; border-bottom: 1px solid var(--line); margin-bottom: 24px;
+    flex-wrap: wrap; gap: 12px;
+  }
+  h1 {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 22px; letter-spacing: -0.02em; color: var(--espresso);
+  }
+  h1 span { color: var(--coral); }
+  .badge {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; background: var(--coral-soft); color: var(--coral);
+  }
+  .who-bar {
+    display: flex; align-items: center; gap: 12px;
+    background: white; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--line);
+  }
+  .who-bar select, .who-bar button {
+    padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px;
+    font-family: inherit; font-size: 14px; background: white; cursor: pointer;
+  }
+  .who-bar button {
+    background: var(--coral); color: white; border-color: var(--coral); font-weight: 600;
+  }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+  .stat {
+    background: white; padding: 14px; border-radius: 12px; border: 1px solid var(--line);
+  }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat .value { font-family: 'Archivo Black', sans-serif; font-size: 26px; color: var(--espresso); margin-top: 4px; }
+  .commission-banner {
+    background: linear-gradient(135deg, var(--coral) 0%, #ff8276 100%);
+    color: white; padding: 14px 18px; border-radius: 12px; margin-bottom: 24px;
+    display: flex; align-items: center; gap: 12px; font-weight: 500;
+  }
+  .commission-banner strong { font-family: 'Archivo Black', sans-serif; font-size: 18px; }
+  .filters {
+    display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .filter-btn {
+    padding: 6px 14px; background: white; border: 1px solid var(--line);
+    border-radius: 999px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .filter-btn.active { background: var(--ink); color: white; border-color: var(--ink); }
+  .leads { display: grid; gap: 12px; }
+  .lead-card {
+    background: white; border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; transition: all 0.2s;
+  }
+  .lead-card.claimed-by-me { border-color: var(--coral); background: var(--coral-soft); }
+  .lead-card.claimed-other { opacity: 0.6; }
+  .lead-card.contacted { background: var(--green-soft); border-color: var(--green); }
+  .lead-card.sold { background: linear-gradient(135deg, #fff8c4 0%, #ffe89c 100%); border-color: #d4a017; }
+  .lead-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 12px; gap: 12px; flex-wrap: wrap;
+  }
+  .lead-name {
+    font-family: 'Instrument Serif', serif; font-size: 22px; color: var(--espresso); line-height: 1.1;
+  }
+  .lead-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .lead-tags {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .tag {
+    padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  }
+  .tag.hot { background: var(--coral-soft); color: var(--coral); border-color: var(--coral); }
+  .tag.warm { background: var(--amber-soft); color: var(--amber); border-color: var(--amber); }
+  .tag.cool { background: #eef3f9; color: #3b6ea5; border-color: #c5d4e3; }
+  .tag.status-debutante { background: var(--green-soft); color: var(--green); border-color: var(--green); }
+  .qualif-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 6px 12px; font-size: 12px; margin-bottom: 14px; padding: 10px;
+    background: var(--bg); border-radius: 8px;
+  }
+  .qualif-grid div span { color: var(--muted); }
+  .qualif-grid div b { color: var(--ink); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    padding: 9px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    border: 1px solid var(--line); background: white; cursor: pointer; font-family: inherit;
+    text-decoration: none; color: var(--ink); display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--bg); }
+  .btn.wa { background: #25D366; color: white; border-color: #25D366; }
+  .btn.wa:hover { background: #1ebe5a; }
+  .btn.claim { background: var(--coral); color: white; border-color: var(--coral); }
+  .btn.contacted { background: var(--green); color: white; border-color: var(--green); }
+  .btn.sold { background: linear-gradient(135deg, #d4a017 0%, #f0c040 100%); color: white; border-color: #d4a017; }
+  .btn.unclaim { background: white; color: var(--muted); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .lead-feedback {
+    margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line);
+  }
+  .lead-feedback .row { margin-bottom: 8px; }
+  .lead-feedback label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .lead-feedback select, .lead-feedback textarea, .lead-feedback input {
+    width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px;
+    font-family: inherit; font-size: 13px; background: white;
+  }
+  .lead-feedback textarea { resize: vertical; min-height: 60px; }
+  .claimed-info {
+    font-size: 12px; padding: 4px 10px; border-radius: 6px;
+    background: var(--bg); color: var(--muted); display: inline-block;
+  }
+  .claimed-info b { color: var(--ink); }
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--ink); color: white; padding: 12px 18px; border-radius: 8px;
+    font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  @media (max-width: 600px) {
+    .lead-head { flex-direction: column; }
+    .actions { flex-direction: column; align-items: stretch; }
+    .actions .btn { justify-content: center; }
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div>
+    <h1>Setting Pipeline <span>·</span> Gigi Academy</h1>
+    <div style="margin-top:4px;font-size:12px;color:var(--muted)">Warm leads survey VSL non bookés · 30 derniers jours</div>
+  </div>
+  <div class="who-bar">
+    <span style="font-size:13px;color:var(--muted)">Tu es :</span>
+    <select id="closer-select">
+      <option value="">— Choisis —</option>
+      <option value="Anaïs">Anaïs</option>
+      <option value="Audrey">Audrey</option>
+      <option value="Mary">Mary</option>
+      <option value="Léa">Léa</option>
+    </select>
+  </div>
+</header>
+
+<div class="commission-banner">
+  <span style="font-size:24px">💸</span>
+  <div>
+    <strong>15% de commission</strong> au lieu de 10% sur les ventes closées depuis cette liste. Effort spécial sprint setting.
+  </div>
+</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="filters" id="filters">
+  <button class="filter-btn active" data-filter="all">Tous</button>
+  <button class="filter-btn" data-filter="unclaimed">Disponibles</button>
+  <button class="filter-btn" data-filter="mine">Mes leads</button>
+  <button class="filter-btn" data-filter="contacted">Contactés</button>
+  <button class="filter-btn" data-filter="sold">Vendus 💰</button>
+</div>
+
+<div class="leads" id="leads"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://hptipvhywxhvmdqnuony.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwdGlwdmh5d3hodm1kcW51b255Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMDQ1MDUsImV4cCI6MjA4OTY4MDUwNX0.xAAQpXcHXSWT-UkJ8jDmpjpnMKW73Xbbxh1EOfyACyY";
+const TABLE = "gigi_lead_setting";
+
+let state = {
+  leads: [],
+  closer: localStorage.getItem("gigi_closer") || "",
+  filter: "all",
+};
+
+const closerSelect = document.getElementById("closer-select");
+closerSelect.value = state.closer;
+closerSelect.addEventListener("change", (e) => {
+  state.closer = e.target.value;
+  localStorage.setItem("gigi_closer", state.closer);
+  render();
+});
+
+document.getElementById("filters").addEventListener("click", (e) => {
+  if (e.target.classList.contains("filter-btn")) {
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+    e.target.classList.add("active");
+    state.filter = e.target.dataset.filter;
+    render();
+  }
+});
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+async function api(method, path, body) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method,
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`,
+      "Content-Type": "application/json",
+      Prefer: method === "PATCH" ? "return=representation" : "return=representation",
+    },
+    body: body ? JSON.stringify(body) : null,
+  });
+  if (!r.ok) {
+    console.error("API err", r.status, await r.text());
+    throw new Error("API error");
+  }
+  return r.json();
+}
+
+async function loadLeads() {
+  state.leads = await api("GET", `${TABLE}?select=*&order=survey_date.desc.nullslast`);
+  render();
+}
+
+function cleanPhone(phone) {
+  if (!phone) return "";
+  return String(phone).replace(/[^\d]/g, "");
+}
+
+function waLink(lead) {
+  const num = cleanPhone(lead.phone);
+  if (!num) return null;
+  const fname = lead.first_name || "";
+  const text = encodeURIComponent(
+    `Coucou ${fname} ! C'est de l'équipe Gigi Academy 🌸 J'ai vu que tu avais regardé la VSL de Léa et rempli le questionnaire — je voulais juste prendre des nouvelles. T'es toujours dans une dynamique de te lancer dans l'onglerie cette année ? On peut s'organiser un appel rapide quand tu veux pour voir si on peut t'accompagner ✨`
+  );
+  return `https://wa.me/${num}?text=${text}`;
+}
+
+function statusTags(lead) {
+  const tags = [];
+  // Avatar
+  const s = lead.statut || "";
+  if (s.includes("Débute totalement")) tags.push({label: "Débute totalement ⭐", cls: "status-debutante"});
+  else if (s.includes("clientes payantes")) tags.push({label: "Quelques clientes", cls: ""});
+  else if (s.includes("pratiqué sur moi")) tags.push({label: "Pratiqué sur soi", cls: ""});
+  else if (s.includes("déjà en activité")) tags.push({label: "Déjà en activité", cls: ""});
+
+  // Quand
+  if ((lead.quand || "").includes("Tout de suite")) tags.push({label: "Tout de suite 🔥", cls: "hot"});
+  else if ((lead.quand || "").includes("30 prochains")) tags.push({label: "<30 jours", cls: "warm"});
+
+  // Budget
+  if ((lead.budget || "").includes("plusieurs fois")) tags.push({label: "Budget OK plusieurs fois", cls: "warm"});
+  else if ((lead.budget || "").includes("investir dans mon avenir")) tags.push({label: "Budget OK cash", cls: "hot"});
+
+  // Motiv
+  if ((lead.motivation || "").includes("10/10")) tags.push({label: "Motiv 10/10", cls: "hot"});
+
+  return tags;
+}
+
+function fullName(lead) {
+  return [lead.first_name, lead.last_name].filter(Boolean).join(" ") || lead.email;
+}
+
+function render() {
+  // Stats
+  const byCloser = {};
+  let claimed = 0, contacted = 0, sold = 0, soldCash = 0;
+  for (const l of state.leads) {
+    if (l.claimed_by) {
+      claimed++;
+      byCloser[l.claimed_by] = (byCloser[l.claimed_by] || 0) + 1;
+    }
+    if (l.contacted_at) contacted++;
+    if (l.sold) { sold++; soldCash += Number(l.sold_amount || 0); }
+  }
+  const myCount = state.closer ? (byCloser[state.closer] || 0) : 0;
+  const myCommission = state.leads
+    .filter(l => l.sold && l.claimed_by === state.closer)
+    .reduce((s, l) => s + Number(l.sold_amount || 0) * 0.15, 0);
+
+  document.getElementById("stats").innerHTML = `
+    <div class="stat"><div class="label">Total leads</div><div class="value">${state.leads.length}</div></div>
+    <div class="stat"><div class="label">Disponibles</div><div class="value">${state.leads.length - claimed}</div></div>
+    <div class="stat"><div class="label">Mes leads ${state.closer ? `(${state.closer})` : ""}</div><div class="value">${myCount}</div></div>
+    <div class="stat"><div class="label">Contactés</div><div class="value">${contacted}</div></div>
+    <div class="stat"><div class="label">Vendus 💰</div><div class="value">${sold}</div></div>
+    <div class="stat"><div class="label">Ma comm 15%</div><div class="value">${myCommission.toFixed(0)}€</div></div>
+  `;
+
+  // Leads
+  let filtered = state.leads;
+  if (state.filter === "unclaimed") filtered = filtered.filter(l => !l.claimed_by);
+  else if (state.filter === "mine") filtered = filtered.filter(l => l.claimed_by === state.closer);
+  else if (state.filter === "contacted") filtered = filtered.filter(l => l.contacted_at);
+  else if (state.filter === "sold") filtered = filtered.filter(l => l.sold);
+
+  const container = document.getElementById("leads");
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty">Aucun lead dans ce filtre.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(lead => {
+    const isMine = lead.claimed_by === state.closer;
+    const isOther = lead.claimed_by && !isMine;
+    const wa = waLink(lead);
+    const tags = statusTags(lead);
+    let cls = "lead-card";
+    if (lead.sold) cls += " sold";
+    else if (lead.contacted_at) cls += " contacted";
+    else if (isMine) cls += " claimed-by-me";
+    else if (isOther) cls += " claimed-other";
+
+    return `
+      <div class="${cls}" data-email="${lead.email}">
+        <div class="lead-head">
+          <div>
+            <div class="lead-name">${fullName(lead)}</div>
+            <div class="lead-meta">${lead.email} · ${lead.phone || "pas de tel"} · Survey ${lead.survey_date || ""}</div>
+          </div>
+          ${lead.claimed_by ? `<div class="claimed-info">📌 Pris par <b>${lead.claimed_by}</b></div>` : ""}
+        </div>
+        <div class="lead-tags">
+          ${tags.map(t => `<span class="tag ${t.cls}">${t.label}</span>`).join("")}
+        </div>
+        <div class="qualif-grid">
+          <div><span>Statut :</span> <b>${lead.statut || "—"}</b></div>
+          <div><span>Démarrer :</span> <b>${lead.quand || "—"}</b></div>
+          <div><span>Budget :</span> <b>${lead.budget || "—"}</b></div>
+          <div><span>Motivation :</span> <b>${lead.motivation || "—"}</b></div>
+          <div><span>Temps/sem :</span> <b>${lead.temps || "—"}</b></div>
+        </div>
+        <div class="actions">
+          ${wa ? `<a href="${wa}" target="_blank" class="btn wa">💬 WhatsApp</a>` : `<span style="font-size:12px;color:var(--muted)">Pas de tel ✗</span>`}
+          ${lead.email ? `<a href="mailto:${lead.email}" class="btn">✉️ Email</a>` : ""}
+          ${!lead.claimed_by && state.closer
+            ? `<button class="btn claim" onclick="claim('${lead.email}')">📌 Je le prends</button>`
+            : ""}
+          ${isMine && !lead.contacted_at
+            ? `<button class="btn contacted" onclick="markContacted('${lead.email}')">✓ Marquer contacté</button>`
+            : ""}
+          ${isMine && lead.contacted_at && !lead.sold
+            ? `<button class="btn sold" onclick="markSold('${lead.email}')">💰 Vendu</button>`
+            : ""}
+          ${isMine
+            ? `<button class="btn unclaim" onclick="unclaim('${lead.email}')">Libérer</button>`
+            : ""}
+        </div>
+        ${isMine && lead.contacted_at ? `
+          <div class="lead-feedback">
+            <div class="row">
+              <label>Pourquoi elle n'a pas booké la 1ère fois ?</label>
+              <select onchange="updateField('${lead.email}','feedback_reason',this.value)">
+                <option value="">— Choisir —</option>
+                <option value="prix" ${lead.feedback_reason === "prix" ? "selected" : ""}>Prix trop élevé</option>
+                <option value="timing" ${lead.feedback_reason === "timing" ? "selected" : ""}>Pas le bon timing</option>
+                <option value="hesitation" ${lead.feedback_reason === "hesitation" ? "selected" : ""}>Hésitation / pas convaincue</option>
+                <option value="oubli" ${lead.feedback_reason === "oubli" ? "selected" : ""}>Distraction / oubli</option>
+                <option value="conjoint" ${lead.feedback_reason === "conjoint" ? "selected" : ""}>Doit en parler au conjoint</option>
+                <option value="bug_calendar" ${lead.feedback_reason === "bug_calendar" ? "selected" : ""}>Pas trouvé de créneau</option>
+                <option value="autre_formation" ${lead.feedback_reason === "autre_formation" ? "selected" : ""}>Déjà inscrite ailleurs</option>
+                <option value="pas_repondu" ${lead.feedback_reason === "pas_repondu" ? "selected" : ""}>Pas de réponse</option>
+                <option value="autre" ${lead.feedback_reason === "autre" ? "selected" : ""}>Autre</option>
+              </select>
+            </div>
+            <div class="row">
+              <label>Notes (optionnel)</label>
+              <textarea onblur="updateField('${lead.email}','feedback_notes',this.value)" placeholder="Ex: 'pas dispo cette semaine, rappeler lundi prochain'">${lead.feedback_notes || ""}</textarea>
+            </div>
+            ${lead.sold ? `
+              <div class="row">
+                <label>Montant vendu (€)</label>
+                <input type="number" value="${lead.sold_amount || 2000}" onblur="updateField('${lead.email}','sold_amount',Number(this.value))">
+              </div>` : ""}
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+async function claim(email) {
+  if (!state.closer) { alert("Choisis ton prénom en haut d'abord"); return; }
+  await api("PATCH", `${TABLE}?email=eq.${encodeURIComponent(email)}`, {
+    claimed_by: state.closer,
+    claimed_at: new Date().toISOString(),
+  });
+  toast(`Lead pris par ${state.closer}`);
+  loadLeads();
+}
+
+async function unclaim(email) {
+  if (!confirm("Libérer ce lead ?")) return;
+  await api("PATCH", `${TABLE}?email=eq.${encodeURIComponent(email)}`, {
+    claimed_by: null, claimed_at: null,
+    contacted_at: null, contact_status: null,
+    feedback_reason: null, feedback_notes: null,
+    sold: false, sold_amount: null, sold_at: null,
+  });
+  toast("Lead libéré");
+  loadLeads();
+}
+
+async function markContacted(email) {
+  await api("PATCH", `${TABLE}?email=eq.${encodeURIComponent(email)}`, {
+    contacted_at: new Date().toISOString(),
+    contact_status: "contacted",
+  });
+  toast("Marqué contacté ✓");
+  loadLeads();
+}
+
+async function markSold(email) {
+  const amt = prompt("Montant vendu en € (défaut 2000) :", "2000");
+  if (amt === null) return;
+  const amount = Number(amt) || 2000;
+  await api("PATCH", `${TABLE}?email=eq.${encodeURIComponent(email)}`, {
+    sold: true, sold_amount: amount, sold_at: new Date().toISOString(),
+  });
+  toast(`💰 Vente ${amount}€ enregistrée — comm ${(amount * 0.15).toFixed(0)}€`);
+  loadLeads();
+}
+
+async function updateField(email, field, value) {
+  const patch = {};
+  patch[field] = value || null;
+  await api("PATCH", `${TABLE}?email=eq.${encodeURIComponent(email)}`, patch);
+  toast("Sauvé");
+  // soft reload to get updated state without re-rendering form fields
+  setTimeout(loadLeads, 800);
+}
+
+window.claim = claim;
+window.unclaim = unclaim;
+window.markContacted = markContacted;
+window.markSold = markSold;
+window.updateField = updateField;
+
+loadLeads();
+setInterval(loadLeads, 15000); // poll every 15s for sync
+</script>
+</body>
+</html>

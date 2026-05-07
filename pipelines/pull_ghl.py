@@ -258,7 +258,9 @@ def contact_to_rows(c: dict, leads_by_id: dict[str, dict]) -> tuple[dict, list[d
     return contact_row, []
 
 
-def opportunity_to_row(o: dict, contact_index: dict[str, dict]) -> dict:
+def opportunity_to_row(o: dict, contact_index: dict[str, dict],
+                        stage_name_by_id: dict[str, str] | None = None,
+                        pipeline_name_by_id: dict[str, str] | None = None) -> dict:
     contact = o.get("contact") or {}
     contact_id = contact.get("id") or o.get("contactId")
     cached = contact_index.get(contact_id) if contact_id else None
@@ -266,7 +268,12 @@ def opportunity_to_row(o: dict, contact_index: dict[str, dict]) -> dict:
     phone = contact.get("phone") or (cached or {}).get("phone")
     lead_id = compute_lead_id(email, phone)
 
-    stage_name = o.get("pipelineStageName") or o.get("stageName")
+    stage_id = o.get("pipelineStageId") or o.get("stageId")
+    stage_name = (
+        o.get("pipelineStageName")
+        or o.get("stageName")
+        or (stage_name_by_id or {}).get(stage_id)
+    )
     status = o.get("status")
     won = is_won_stage(stage_name, status)
     contracted_at = to_iso(o.get("updatedAt") if won else None) if won else None
@@ -412,11 +419,28 @@ def main() -> int:
             n_contacts += 1
     print(f"  contacts pulled: {n_contacts}")
 
-    # 2) Opportunities (no native date filter — pull all, transform)
+    # 2a) Pipelines — resolve stage_id → stage_name + pipeline_id → name
+    print("→ opportunities/pipelines (resolve stage names)")
+    stage_name_by_id: dict[str, str] = {}
+    pipeline_name_by_id: dict[str, str] = {}
+    try:
+        for p in ghl.list_pipelines():
+            pid = p.get("id")
+            if pid:
+                pipeline_name_by_id[pid] = p.get("name") or ""
+            for s in p.get("stages") or []:
+                sid = s.get("id")
+                if sid:
+                    stage_name_by_id[sid] = s.get("name") or ""
+        print(f"  resolved {len(stage_name_by_id)} stages across {len(pipeline_name_by_id)} pipelines")
+    except Exception as e:
+        print(f"!! pipelines fetch failed ({e}) — stage_name will stay null")
+
+    # 2b) Opportunities (no native date filter — pull all, transform)
     print("→ opportunities/search")
     opp_rows: list[dict] = []
     for o in ghl.search_opportunities():
-        opp_rows.append(opportunity_to_row(o, contact_index))
+        opp_rows.append(opportunity_to_row(o, contact_index, stage_name_by_id, pipeline_name_by_id))
     print(f"  opportunities pulled: {len(opp_rows)}")
 
     # 3) Calendar events (3 calendars)

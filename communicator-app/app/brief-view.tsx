@@ -36,6 +36,7 @@ export default function BriefView({ initial }: { initial: BriefData }) {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [age, setAge] = useState<number>(initial.ageMs ?? 0);
+  const [copiedToast, setCopiedToast] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setAge((a) => a + 30_000), 30_000);
@@ -77,13 +78,29 @@ export default function BriefView({ initial }: { initial: BriefData }) {
               {data.cached ? " · cache" : " · live"}
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <button
               onClick={regenerate}
               disabled={isPending}
               className="bg-coral hover:bg-coral-deep disabled:opacity-50 text-paper font-mono text-xs uppercase tracking-widest px-4 py-2.5 rounded-sm transition"
             >
               {isPending ? "Génération…" : "Régénérer"}
+            </button>
+            <button
+              onClick={async () => {
+                const cmd = "cd ~/Dev/projets/scale-ia/clients/lea/gigi-kpi/ && claude";
+                try {
+                  await navigator.clipboard.writeText(cmd);
+                  setCopiedToast(true);
+                  setTimeout(() => setCopiedToast(false), 3500);
+                } catch {
+                  alert(cmd);
+                }
+              }}
+              title="Copie la commande pour ouvrir Claude Code dans le projet (MCP Supabase déjà branché — pose ta question, l'agent IA répond avec les data live)"
+              className="border border-stone text-espresso font-mono text-xs uppercase tracking-widest px-4 py-2.5 rounded-sm hover:bg-paper transition"
+            >
+              💬 Pose une question
             </button>
             <button
               onClick={loadHistory}
@@ -110,6 +127,27 @@ export default function BriefView({ initial }: { initial: BriefData }) {
         <span>Scale.IA · Powered by AIOS</span>
         <span>{new Date(data.generatedAt).toISOString().slice(0, 16).replace("T", " ")}</span>
       </footer>
+
+      {/* Toast — Pose une question */}
+      <div
+        role="status"
+        aria-live="polite"
+        className={`fixed bottom-6 right-6 max-w-md z-50 transition-opacity duration-300 ${
+          copiedToast ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <div className="bg-espresso text-paper px-5 py-4 rounded-sm shadow-lg border border-stone">
+          <div className="font-mono text-xs uppercase tracking-widest text-coral mb-2">
+            ✓ Commande copiée
+          </div>
+          <div className="text-sm leading-relaxed">
+            Ouvre ton terminal et colle. Claude Code lance avec MCP Supabase déjà branché — pose ta question, l'agent query la data live.
+          </div>
+          <code className="mt-3 block text-xs bg-paper text-espresso p-2 font-mono break-all">
+            cd ~/Dev/projets/scale-ia/clients/lea/gigi-kpi/ && claude
+          </code>
+        </div>
+      </div>
 
       {showHistory && (
         <div

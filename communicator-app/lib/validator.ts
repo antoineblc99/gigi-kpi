@@ -210,41 +210,53 @@ async function checkCoherence(): Promise<CheckResult[]> {
     });
   }
 
-  // (3) fact_sale Gagné count 30d ≈ EOD ventes (Setting + VSL) 30d
-  try {
-    const rows = await q(`
-      WITH ghl AS (
-        SELECT count(*) n FROM fact_sale
-        WHERE is_won = true AND created_at >= current_date - interval '30 days'
-      ),
-      eod AS (
-        SELECT COALESCE(sum(ventes_setting + ventes_vsl), 0) n FROM fact_eod_closeuse
-        WHERE submit_date >= current_date - interval '30 days'
-      )
-      SELECT ghl.n ghl_n, eod.n eod_n FROM ghl, eod
-    `);
-    const ghl = Number(rows[0]?.ghl_n ?? 0);
-    const eod = Number(rows[0]?.eod_n ?? 0);
-    let status: CheckStatus = "green";
-    let notes = "";
-    if (Math.abs(ghl - eod) > Math.max(2, Math.max(ghl, eod) * 0.3)) {
-      status = "yellow";
-      notes = `${Math.abs(ghl - eod)} sale(s) gap between GHL pipeline and EOD declarations`;
+  // (3) fact_sale Gagné count vs EOD ventes — checked on BOTH 7j (sensitive) AND 30j (smoothed)
+  for (const win of [7, 30] as const) {
+    try {
+      const rows = await q(`
+        WITH ghl AS (
+          SELECT count(*) n FROM fact_sale
+          WHERE is_won = true AND created_at >= current_date - interval '${win} days'
+        ),
+        eod AS (
+          SELECT COALESCE(sum(ventes_setting + ventes_vsl), 0) n FROM fact_eod_closeuse
+          WHERE submit_date >= current_date - interval '${win} days'
+            AND NOT (calls_planifies > 0 AND calls_planifies = calls_recus
+                     AND calls_planifies = ventes_setting AND calls_planifies = ventes_vsl
+                     AND calls_planifies::numeric = cash_contracte)
+        )
+        SELECT ghl.n ghl_n, eod.n eod_n FROM ghl, eod
+      `);
+      const ghl = Number(rows[0]?.ghl_n ?? 0);
+      const eod = Number(rows[0]?.eod_n ?? 0);
+      let status: CheckStatus = "green";
+      let notes = "";
+      const gap = Math.abs(ghl - eod);
+      const tolerance = Math.max(2, Math.max(ghl, eod) * 0.3);
+      if (gap > tolerance) {
+        // 7d window: gap suggests closeuses not updating pipeline → yellow
+        // 30d window: persistent gap → red (confirms systemic process gap)
+        status = win === 30 ? "red" : "yellow";
+        notes =
+          eod > ghl
+            ? `${gap} ventes EOD non reflétées en GHL pipeline (closeuses oublient de move l'opp en "Gagné")`
+            : `${gap} GHL won sans EOD (closeuses oublient l'EOD ?)`;
+      }
+      out.push({
+        check_name: `coherence:ghl_won_vs_eod_sales_${win}d`,
+        status,
+        expected: `GHL Gagné ${win}d ≈ EOD ventes ${win}d (within 30%)`,
+        observed: `ghl_won=${ghl}, eod_sales=${eod}`,
+        notes: notes || undefined,
+      });
+    } catch (e: any) {
+      out.push({
+        check_name: `coherence:ghl_won_vs_eod_sales_${win}d`,
+        status: "red",
+        expected: "queryable",
+        observed: `error: ${String(e?.message ?? e).slice(0, 100)}`,
+      });
     }
-    out.push({
-      check_name: "coherence:ghl_won_vs_eod_sales",
-      status,
-      expected: "GHL Gagné 30d ≈ EOD ventes 30d (within 30%)",
-      observed: `ghl_won=${ghl}, eod_sales=${eod}`,
-      notes: notes || undefined,
-    });
-  } catch (e: any) {
-    out.push({
-      check_name: "coherence:ghl_won_vs_eod_sales",
-      status: "red",
-      expected: "queryable",
-      observed: `error: ${String(e?.message ?? e).slice(0, 100)}`,
-    });
   }
 
   // (4a) Sentinel/test EOD detection — same value repeated across all numeric fields

@@ -279,6 +279,77 @@ async function checkCoherence(): Promise<CheckResult[]> {
 }
 
 // ============================================================================
+// CAPACITY — calendar saturation per closeuse
+// ============================================================================
+async function checkCapacity(): Promise<CheckResult[]> {
+  const out: CheckResult[] = [];
+  try {
+    const rows = await q(`
+      WITH latest AS (
+        SELECT DISTINCT ON (calendar_id, target_date)
+          calendar_id, calendar_name, target_date, slots_total, slots_booked, utilization_pct
+        FROM fact_calendar_capacity
+        WHERE target_date >= current_date AND target_date < current_date + interval '4 days'
+        ORDER BY calendar_id, target_date, snapshot_at DESC
+      )
+      SELECT calendar_name,
+             SUM(slots_total)::int  AS total,
+             SUM(slots_booked)::int AS booked,
+             ROUND(100.0 * SUM(slots_booked) / NULLIF(SUM(slots_total), 0), 1) AS util_pct
+      FROM latest
+      GROUP BY calendar_name
+    `);
+    if (!rows.length) {
+      out.push({
+        check_name: "capacity:closeuse_72h",
+        status: "yellow",
+        expected: "fact_calendar_capacity populated",
+        observed: "no recent snapshot",
+        notes: "Run pipelines/pull_calendar_capacity.py",
+      });
+      return out;
+    }
+    for (const r of rows) {
+      const util = Number(r.util_pct ?? 0);
+      const total = Number(r.total ?? 0);
+      const booked = Number(r.booked ?? 0);
+      let status: CheckStatus = "green";
+      let notes = "";
+      if (total === 0) {
+        status = "yellow";
+        notes = "Aucun slot ouvert sur 72h — calendrier fermé ou config absente";
+      } else if (util > 90) {
+        status = "red";
+        notes = "Saturation > 90% — sales constrained, recruter ou élargir capacity";
+      } else if (util > 85) {
+        status = "yellow";
+        notes = "Tension capacity — anticiper recrutement";
+      } else if (util < 50 && total >= 5) {
+        status = "yellow";
+        notes = "Sous 50% utilization — lead-constrained, scaler les ads ou améliorer qualif";
+      }
+      // Optimal range 70-85% = green
+      out.push({
+        check_name: `capacity:${r.calendar_name?.slice(0, 30) || "?"}`,
+        status,
+        expected: "70-85% utilization sur 72h prochaines (optimal)",
+        observed: `${booked}/${total} bookés (${util}%)`,
+        delta_pct: util,
+        notes: notes || undefined,
+      });
+    }
+  } catch (e: any) {
+    out.push({
+      check_name: "capacity:closeuse_72h",
+      status: "red",
+      expected: "queryable",
+      observed: `error: ${String(e?.message ?? e).slice(0, 100)}`,
+    });
+  }
+  return out;
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 export type ValidatorRunResult = {
@@ -295,7 +366,7 @@ export type ValidatorRunResult = {
 export async function runValidator(): Promise<ValidatorRunResult> {
   const ranAt = new Date().toISOString();
   const all: CheckResult[] = [];
-  for (const fn of [checkFreshness, checkVolume, checkCoherence]) {
+  for (const fn of [checkFreshness, checkVolume, checkCoherence, checkCapacity]) {
     try {
       all.push(...(await fn()));
     } catch (e: any) {

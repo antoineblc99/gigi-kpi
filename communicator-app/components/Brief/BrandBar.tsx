@@ -1,5 +1,6 @@
 import type { BriefMeta } from "@/lib/brief-types";
 import { formatGeneratedAt } from "./format";
+import AskButton from "./AskButton";
 
 export default function BrandBar({ meta }: { meta: BriefMeta }) {
   return (
@@ -26,6 +27,7 @@ export default function BrandBar({ meta }: { meta: BriefMeta }) {
         >
           Brief Data · v1
         </span>
+        <AskButton />
       </div>
       <div className="brand-meta">
         <span className="live">Live</span>

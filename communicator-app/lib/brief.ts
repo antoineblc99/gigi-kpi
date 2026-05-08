@@ -54,6 +54,8 @@ source_funnel mapping (validé Antoine 2026-05-08) :
 
 ⚠️ Pour les volumes par funnel utilise COUNT(DISTINCT lead_id). Pour les stages pipeline utilise COUNT(*).
 ⚠️ INTERDIT d'utiliser fact_ad_daily.vsl_optin (pixel double-compte).
+⚠️ FILTRE LIGNES SENTINELLES dans fact_eod_closeuse : exclure les rows où calls_planifies = calls_recus = ventes_setting = ventes_vsl = cash_contracte ET cette valeur > 0 (= test webhook Typeform). Ajoute cette clause WHERE à toutes tes queries fact_eod_closeuse :
+  AND NOT (calls_planifies > 0 AND calls_planifies = calls_recus AND calls_planifies = ventes_setting AND calls_planifies = ventes_vsl AND calls_planifies::numeric = cash_contracte)
 
 ═══════════════════════════════════════════════════════════
 OUTPUT (output_brief tool — appel UNIQUE en fin)

@@ -247,7 +247,37 @@ async function checkCoherence(): Promise<CheckResult[]> {
     });
   }
 
-  // (4) Critical NULLs check
+  // (4a) Sentinel/test EOD detection — same value repeated across all numeric fields
+  // (e.g., test Typeform with 42 everywhere). These corrupt aggregates.
+  try {
+    const rows = await q(`
+      SELECT id, network_id, closer_name, submit_date, calls_planifies, calls_recus,
+             ventes_setting, ventes_vsl, cash_contracte
+      FROM fact_eod_closeuse
+      WHERE submit_date >= current_date - interval '30 days'
+        AND calls_planifies > 0
+        AND calls_planifies = calls_recus
+        AND calls_planifies = ventes_setting
+        AND calls_planifies = ventes_vsl
+        AND calls_planifies::numeric = cash_contracte
+      LIMIT 5
+    `);
+    if (rows.length > 0) {
+      const ids = rows.map((r) => r.id).join(", ");
+      const closers = [...new Set(rows.map((r) => r.closer_name))].join(", ");
+      out.push({
+        check_name: "integrity:eod_sentinel_rows",
+        status: "yellow",
+        expected: "0 EOD rows with all-equal numeric fields (test sentinel pattern)",
+        observed: `${rows.length} ligne(s) suspectes (ids ${ids}) closeuse=${closers}`,
+        notes: "Probable test webhook Typeform — supprimer ces lignes pour pas polluer les briefs",
+      });
+    }
+  } catch (e: any) {
+    // Non-blocking
+  }
+
+  // (4b) Critical NULLs check
   try {
     const rows = await q(`
       SELECT

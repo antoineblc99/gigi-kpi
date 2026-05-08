@@ -126,9 +126,9 @@ Action concrète après le tableau.
 ## Funnel Follow
 Tableau Follow (pas de VSL ni survey, funnel direct) :
 - Spend
+- **Followers gagnés (IG total compte)** : SUM(follower_count_delta) FROM fact_ig_followers WHERE date >= '7d ago' — c'est le compte @giginails77 entier (ads Follow + ads VSL_*_IG_Engagers + organic mélangés). Ne pas attribuer 100% aux ads.
 - **Calls bookés** (fact_call calendar AQ8R..., actifs)
 - **Cost / call**
-- Mention "followers IG : non tracké via Meta API"
 - Top ad + drain identifié.
 Action concrète.
 

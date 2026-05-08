@@ -45,33 +45,41 @@ GROUP BY CASE WHEN a.name ILIKE '%VSL%' THEN 'VSL' WHEN ... 'FOLLOW' END.
 - VSL : COUNT(*) FROM fact_call WHERE calendar_id='8ECqPVcPGz81JGlzCmoG' AND status NOT IN ('cancelled') AND scheduled_at IN window 7j.
 - Follow : pareil avec calendar_id='AQ8RmdYw7iyru79Axymf'.
 
-Étape 3. **Coûts par funnel** (calculés explicitement)
+Étape 3. **Vocabulaire métier — STRICT** (Antoine définit, non négociable)
 
-⚠️ Sources opt-in — INTERDIT d'utiliser fact_ad_daily.vsl_optin comme proxy "opt-in". Ce Pixel custom fire à chaque chargement page VSL (refresh = +1, sur-compte ~45 %). Cf memory feedback_meta_ads_cost_calc.md.
+| Étape funnel | Source data | Définition Léa |
+|---|---|---|
+| **Opt-in** | \`fact_contact\` | Lead = a soumis le form 1 sur la landing |
+| **VSL watched** | \`fact_survey\` | A regardé la VSL jusqu'au bout ET rempli le qualif post-VSL |
+| **Lead chaud** | \`fact_survey\` filtré (quand≈'Tout de suite' OR '<30j') AND (budget LIKE 'Oui%') | Lead que les closeuses doivent appeler en priorité |
+| **Call booké** | \`fact_call\` (calendrier GHL, status != 'cancelled') | RDV pris dans le calendrier |
+| **Call reçu (show)** | \`fact_eod_closeuse.calls_recus\` | Closeuse a effectivement eu le call |
+| **Vente** | \`fact_sale.is_won = true\` OR \`fact_eod_closeuse.ventes_setting + ventes_vsl\` | Contrat signé |
+| **Cash collecté** | \`fact_eod_closeuse.cash_collecte\` | Premier paiement encaissé (carte + virement) |
 
-Sources fiables (par ordre de qualif) :
-- **Opt-in landing (form 1)** = COUNT(*) FROM fact_contact WHERE date_added >= '7d ago' AND source ILIKE '%form%'.
-- **Opt-in qualifié (survey complet post-VSL)** = COUNT(*) FROM fact_survey WHERE submitted_at >= '7d ago'.
-- **Lead chaud** = fact_survey filtré sur (quand IN ['Tout de suite', '<30j']) AND (budget LIKE 'Oui%') — c'est l'audience que les closeuses appellent.
+⚠️ INTERDIT d'utiliser fact_ad_daily.vsl_optin comme opt-in. Ce Pixel custom fire à chaque chargement page VSL (refresh = +1). Cf feedback_meta_ads_cost_calc.md.
 
-Calculs CPL VSL :
-- CPL opt-in = spend_VSL / count(fact_contact 7j attribuables au funnel VSL via utm_content).
-- CPL survey = spend_VSL / count(fact_survey 7j).
-- CPL lead chaud = spend_VSL / count(fact_survey filtré chaud 7j).
-- Mentionne le Pixel vsl_optin uniquement comme "Pixel sur-compte (XX vs YY réels)".
+Étape 4. **Calculs taux par funnel** (à mettre dans tableau)
+- CPL opt-in VSL = spend_VSL / count(fact_contact attribué VSL via utm_content)
+- Taux VSL watched = count(fact_survey) / count(fact_contact attribué VSL) — % opt-in qui regardent jusqu'au bout
+- Cost per VSL watch = spend_VSL / count(fact_survey)
+- Taux lead chaud = count(fact_survey filtré chaud) / count(fact_survey) — qualité de l'audience
+- Cost per call = spend_VSL / count(fact_call calendar VSL actifs)
+- Taux show = calls_recus EOD / calls_planifies EOD
+- Taux close = ventes / calls_recus
+- ROAS contracté = sum(cash_contracte EOD) / spend
+- ROAS collecté (master) = sum(cash_collecte EOD) / spend
 
-Cost per call (par funnel) :
-- VSL : spend_VSL / count(fact_call calendar 8ECq... actifs 7j).
-- Follow : spend_Follow / count(fact_call calendar AQ8R... actifs 7j).
+Pour Follow : pas de VSL ni survey. Funnel = Spend → calls bookés (calendrier AQ8R...) → show → vente. Donc juste cost per call + show + close + ROAS.
 
 (Note : fact_ad_daily.followers_ig = 0 — Meta API ne l'expose pas, known issue.)
 
-Étape 4. **Pipeline GHL via fact_sale.stage_name**
+Étape 5. **Pipeline GHL via fact_sale.stage_name**
 "R1 Planifié", "R1 No show", "R2 Planifié", "Gagné", "Follow Up <2 sem", "Follow Up Long Terme",
 "New Lead (A appeler)", "Form filled" — counts 7j vs avant.
 ROAS contracté = sum(monetary_value WHERE is_won) / spend total.
 
-Étape 5. **EOD closeuses** via fact_eod_closeuse (master cash)
+Étape 6. **EOD closeuses** via fact_eod_closeuse (master cash)
 - calls_planifies, calls_recus (= show rate)
 - ventes_setting + ventes_vsl
 - cash_contracte (montant total signé sur les ventes)
@@ -79,7 +87,7 @@ ROAS contracté = sum(monetary_value WHERE is_won) / spend total.
 - % encaissement initial = cash_collecte / cash_contracte
 - EOD manquants aujourd'hui (Anaïs Bruneel, Audrey Cuni)
 
-Étape 6. **ATTRIBUTION CRÉA → VENTE** (le killer feature)
+Étape 7. **ATTRIBUTION CRÉA → VENTE** (le killer feature)
 SELECT dim_ad.name, sum(spend), count(distinct fc.lead_id) leads_attributed,
 count(distinct sa.opportunity_id) FILTER (WHERE sa.is_won) wins
 FROM fact_ad_daily f
@@ -103,12 +111,25 @@ FORMAT DE SORTIE (markdown strict, 500-700 mots)
 3-5 bullets : spend total, nombre calls, ventes contractées, cash collecté, ROAS.
 
 ## Funnel VSL
-Tableau : Métrique | 7j | vs S-1 | Verdict.
-Inclure : spend, opt-ins, CPL opt-in, calls bookés (calendrier), cost/call, top ad nommée.
-Action concrète.
+Tableau : Métrique | 7j | vs S-1 | Verdict. Inclure dans cet ordre :
+- Spend
+- **Opt-ins** (fact_contact, lead via form 1)
+- **CPL opt-in** (€/lead)
+- **VSL watched** (fact_survey, a regardé jusqu'au bout)
+- **Taux VSL watched** (= survey/opt-ins, %)
+- **Lead chauds** (survey filtré "tout de suite/30j" + "budget oui")
+- **Calls bookés** (fact_call calendar VSL, actifs)
+- **Cost / call**
+- Top ad nommée + 1 win attribuée si applicable.
+Action concrète après le tableau.
 
 ## Funnel Follow
-Idem que VSL mais avec : spend, calls bookés (calendrier "Appel découverte"), cost/call. Mentionne que les followers IG ne sont pas tracked via API (limitation Meta).
+Tableau Follow (pas de VSL ni survey, funnel direct) :
+- Spend
+- **Calls bookés** (fact_call calendar AQ8R..., actifs)
+- **Cost / call**
+- Mention "followers IG : non tracké via Meta API"
+- Top ad + drain identifié.
 Action concrète.
 
 ## Closing & Encaissement

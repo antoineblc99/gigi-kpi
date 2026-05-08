@@ -258,6 +258,35 @@ def contact_to_rows(c: dict, leads_by_id: dict[str, dict]) -> tuple[dict, list[d
     return contact_row, []
 
 
+def classify_funnel(source: str | None) -> str | None:
+    """Map GHL opportunity.source → 'VSL' | 'Setting' | None.
+
+    VSL funnel (lead → Landing → opt-in → VSL → survey → call):
+      - 'Form Léa Optin', 'Form Léa', 'Form Lea' (form 1 sur landing)
+      - 'Survey VSL Lea' (survey post-VSL)
+      - 'VSL' (manuel)
+      - 'Appel de découverte - Gigi Academy (VSL)' (booking calendar VSL)
+
+    Setting funnel (DM IG → setteuse → call):
+      - 'Setting' (manuel par setteuse)
+      - 'Appel de découverte - Gigi Academy' (booking calendar Standard)
+    """
+    if not source:
+        return None
+    s = source.strip()
+    s_low = s.lower()
+    if (
+        "vsl" in s_low  # catches "VSL", "Survey VSL", "(VSL)"
+        or s in ("Form Léa Optin", "Form Léa", "Form Lea")
+        or "form léa" in s_low
+        or "form lea" in s_low
+    ):
+        return "VSL"
+    if "setting" in s_low or s == "Appel de découverte - Gigi Academy":
+        return "Setting"
+    return None
+
+
 def opportunity_to_row(o: dict, contact_index: dict[str, dict],
                         stage_name_by_id: dict[str, str] | None = None,
                         pipeline_name_by_id: dict[str, str] | None = None) -> dict:
@@ -278,14 +307,9 @@ def opportunity_to_row(o: dict, contact_index: dict[str, dict],
     won = is_won_stage(stage_name, status)
     contracted_at = to_iso(o.get("updatedAt") if won else None) if won else None
 
-    # source funnel: best-effort from tags / source / pipeline name
-    source_funnel = None
-    tags = (cached or {}).get("tags") or contact.get("tags") or []
-    tags_low = [str(t).lower() for t in tags]
-    if any("vsl" in t for t in tags_low):
-        source_funnel = "VSL"
-    elif any("follow" in t or "insta" in t for t in tags_low):
-        source_funnel = "Follow"
+    # source funnel: derived from GHL native opportunity.source field.
+    # Mapping validated with Antoine 2026-05-08 — see feedback_lea_source_funnel.md.
+    source_funnel = classify_funnel(o.get("source"))
 
     return {
         "opportunity_id": o.get("id"),

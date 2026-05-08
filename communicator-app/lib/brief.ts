@@ -53,9 +53,14 @@ GROUP BY CASE WHEN a.name ILIKE '%VSL%' THEN 'VSL' WHEN ... 'FOLLOW' END.
 | **VSL watched** | \`fact_survey\` | A regardé la VSL jusqu'au bout ET rempli le qualif post-VSL |
 | **Lead chaud** | \`fact_survey\` filtré (quand≈'Tout de suite' OR '<30j') AND (budget LIKE 'Oui%') | Lead que les closeuses doivent appeler en priorité |
 | **Call booké** | \`fact_call\` (calendrier GHL, status != 'cancelled') | RDV pris dans le calendrier |
+| **Calls programmés agenda du jour** | \`fact_eod_closeuse.calls_planifies\` | RDV de la closeuse pour ce jour (bookés J-1 ou avant) |
 | **Call reçu (show)** | \`fact_eod_closeuse.calls_recus\` | Closeuse a effectivement eu le call |
+| **No-show réel** | \`fact_sale.stage_name='R1 No show'\` | Closeuse a updaté la pipeline GHL en no-show. fact_call.status reste à 'confirmed' (closeuses ne touchent pas le calendar) |
 | **Vente** | \`fact_sale.is_won = true\` OR \`fact_eod_closeuse.ventes_setting + ventes_vsl\` | Contrat signé |
 | **Cash collecté** | \`fact_eod_closeuse.cash_collecte\` | Premier paiement encaissé (carte + virement) |
+| **source_funnel** | \`fact_sale.source_funnel\` | Mapping auto VSL/Setting depuis raw.source — voir mapping en étape 5 |
+
+⚠️ Pour les volumes par funnel, utilise toujours \`COUNT(DISTINCT lead_id)\` PAS \`COUNT(*)\` — un même lead peut avoir 2 opps (capté en Setting puis re-bookée via calendrier). Pour les stages pipeline (R1 No show, Gagné, etc.) utilise \`COUNT(*)\`.
 
 ⚠️ INTERDIT d'utiliser fact_ad_daily.vsl_optin comme opt-in. Ce Pixel custom fire à chaque chargement page VSL (refresh = +1). Cf feedback_meta_ads_cost_calc.md.
 
@@ -74,9 +79,18 @@ Pour Follow : pas de VSL ni survey. Funnel = Spend → calls bookés (calendrier
 
 (Note : fact_ad_daily.followers_ig = 0 — Meta API ne l'expose pas, known issue.)
 
-Étape 5. **Pipeline GHL via fact_sale.stage_name**
-"R1 Planifié", "R1 No show", "R2 Planifié", "Gagné", "Follow Up <2 sem", "Follow Up Long Terme",
-"New Lead (A appeler)", "Form filled" — counts 7j vs avant.
+Étape 5. **Pipeline GHL via fact_sale.stage_name + source_funnel**
+
+source_funnel mapping (validé Antoine 2026-05-08) :
+- 'VSL' = source IN (Form Léa Optin, Form Léa, Form Lea, Survey VSL Lea, VSL, Appel découverte (VSL))
+- 'Setting' = source IN (Setting, Appel de découverte - Gigi Academy)
+
+Stages : "R1 Planifié", "R1 No show", "R2 Planifié", "Gagné", "Follow Up <2 sem", "Follow Up Long Terme",
+"New Lead (A appeler)", "Form filled".
+
+Volumes leads par funnel : COUNT(DISTINCT lead_id) WHERE source_funnel = '...' AND created_at >= '7d ago'.
+Volumes stages (R1 No show, etc.) : COUNT(*) (chaque opp = un RDV différent à suivre).
+
 ROAS contracté = sum(monetary_value WHERE is_won) / spend total.
 
 Étape 6. **EOD closeuses** via fact_eod_closeuse (master cash)

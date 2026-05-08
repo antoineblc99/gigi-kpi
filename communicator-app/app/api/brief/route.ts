@@ -18,18 +18,18 @@ export async function GET(req: NextRequest) {
     return Response.json({ ...cached.payload, cached: true, ageMs: now - cached.at });
   }
 
-  // Try latest stored brief if it's fresh enough.
   if (!force && !cached) {
     try {
       const recent = await listBriefs(1);
-      if (recent.length) {
-        const ageMs = now - new Date(recent[0].created_at).getTime();
+      const r = recent[0];
+      if (r?.data) {
+        const ageMs = now - new Date(r.created_at).getTime();
         if (ageMs < CACHE_MS) {
           const payload = {
-            markdown: recent[0].markdown,
-            generatedAt: recent[0].created_at,
-            toolCalls: recent[0].tool_calls ?? 0,
-            modelUsed: recent[0].model_used ?? "unknown",
+            data: r.data,
+            generatedAt: r.created_at,
+            toolCalls: r.tool_calls ?? 0,
+            modelUsed: r.model_used ?? "unknown",
             warnings: [],
           };
           cached = { at: now - ageMs, payload };
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
         }
       }
     } catch {
-      // ignore — table may not exist yet
+      // ignore
     }
   }
 
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     return Response.json({ ...result, cached: false, ageMs: 0 });
   } catch (e: any) {
     return Response.json(
-      { error: String(e?.message ?? e), markdown: `## Erreur\n\n\`${String(e?.message ?? e)}\`` },
+      { error: String(e?.message ?? e) },
       { status: 500 }
     );
   }

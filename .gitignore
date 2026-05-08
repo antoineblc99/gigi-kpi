@@ -7,3 +7,16 @@ venv/
 .DS_Store
 node_modules/
 *.log
+
+# Build artifacts
+.next/
+.turbo/
+.vercel/
+
+# Editor
+.idea/
+.vscode/
+
+# Legacy snapshot artifacts (folder kept, but no node_modules etc)
+_legacy/**/__pycache__/
+_legacy/**/node_modules/

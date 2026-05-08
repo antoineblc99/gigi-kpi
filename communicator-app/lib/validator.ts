@@ -284,20 +284,31 @@ async function checkCoherence(): Promise<CheckResult[]> {
 async function checkCapacity(): Promise<CheckResult[]> {
   const out: CheckResult[] = [];
   try {
+    // Lea-specific: les 2 calendars (VSL + Standard) partagent la même closeuse
+    // (Anaïs `8MJYvMAYOFpD`). Quand l'API GHL retourne 7 slots libres sur les 2,
+    // c'est la même slot dédupliquée — pas 14. On prend MAX(slots_free) par jour.
+    // Les bookings (slots_booked) restent SUM car chaque RDV est unique à un calendar.
     const rows = await q(`
       WITH latest AS (
         SELECT DISTINCT ON (calendar_id, target_date)
-          calendar_id, calendar_name, target_date, slots_total, slots_booked, utilization_pct
+          calendar_id, target_date, slots_free, slots_booked
         FROM fact_calendar_capacity
         WHERE target_date >= current_date AND target_date < current_date + interval '4 days'
         ORDER BY calendar_id, target_date, snapshot_at DESC
+      ),
+      per_day AS (
+        SELECT target_date,
+               MAX(slots_free)::int AS slots_free,   -- slots dispos partagés = MAX
+               SUM(slots_booked)::int AS slots_booked -- bookings uniques = SUM
+        FROM latest
+        GROUP BY target_date
       )
-      SELECT calendar_name,
-             SUM(slots_total)::int  AS total,
+      SELECT 'closeuses (Anaïs)' AS calendar_name,
+             SUM(slots_free + slots_booked)::int AS total,
              SUM(slots_booked)::int AS booked,
-             ROUND(100.0 * SUM(slots_booked) / NULLIF(SUM(slots_total), 0), 1) AS util_pct
-      FROM latest
-      GROUP BY calendar_name
+             SUM(slots_free)::int AS free,
+             ROUND(100.0 * SUM(slots_booked) / NULLIF(SUM(slots_free + slots_booked), 0), 1) AS util_pct
+      FROM per_day
     `);
     if (!rows.length) {
       out.push({
@@ -313,6 +324,7 @@ async function checkCapacity(): Promise<CheckResult[]> {
       const util = Number(r.util_pct ?? 0);
       const total = Number(r.total ?? 0);
       const booked = Number(r.booked ?? 0);
+      const free = Number(r.free ?? 0);
       let status: CheckStatus = "green";
       let notes = "";
       if (total === 0) {
@@ -333,7 +345,7 @@ async function checkCapacity(): Promise<CheckResult[]> {
         check_name: `capacity:${r.calendar_name?.slice(0, 30) || "?"}`,
         status,
         expected: "70-85% utilization sur 72h prochaines (optimal)",
-        observed: `${booked}/${total} bookés (${util}%)`,
+        observed: `${booked}/${total} bookés (${util}%) · ${free} libres`,
         delta_pct: util,
         notes: notes || undefined,
       });

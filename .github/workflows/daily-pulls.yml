@@ -1,0 +1,53 @@
+name: daily-pulls
+
+on:
+  schedule:
+    # 06:00 UTC = 07:00 Paris (hiver) / 08:00 Paris (été). Léa : matin.
+    - cron: '0 6 * * *'
+  workflow_dispatch:  # Run manuel depuis l'UI GitHub
+
+jobs:
+  run-pipelines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: .
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+      SUPABASE_PROJECT_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GHL_API_KEY: ${{ secrets.GHL_API_KEY }}
+      GHL_LOCATION_ID: ${{ secrets.GHL_LOCATION_ID }}
+      GHL_CAL_VSL: ${{ secrets.GHL_CAL_VSL }}
+      GHL_CAL_FOLLOW: ${{ secrets.GHL_CAL_FOLLOW }}
+      GHL_CAL_BIENVENUE: ${{ secrets.GHL_CAL_BIENVENUE }}
+      GHL_SURVEY_VSL: ${{ secrets.GHL_SURVEY_VSL }}
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
+      META_APP_ID: ${{ secrets.META_APP_ID }}
+      META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
+      META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
+      META_API_VERSION: ${{ secrets.META_API_VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: pull_ghl
+        run: python pipelines/pull_ghl.py --days 7
+
+      - name: pull_instagram
+        if: always()
+        run: python pipelines/pull_instagram.py
+
+      - name: pull_meta
+        if: always()
+        run: python pipelines/pull_meta.py --days 7
+
+      - name: pull_calendar_capacity
+        if: always()
+        run: python pipelines/pull_calendar_capacity.py

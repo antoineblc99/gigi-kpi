@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT))
 
 from pipelines.lib.ghl_client import GHLClient  # noqa: E402
 from pipelines.lib.leadid import compute_lead_id, normalize_email, normalize_phone  # noqa: E402
+from pipelines.lib.retry import retry_call  # noqa: E402
 
 
 # ---------- env loader (.env.local) ----------
@@ -58,19 +59,23 @@ class Supabase:
         total = 0
         for i in range(0, len(rows), 500):
             chunk = rows[i:i + 500]
-            r = requests.post(
-                f"{self.url}/rest/v1/{table}?on_conflict={on_conflict}",
-                headers={
-                    "apikey": self.key,
-                    "Authorization": f"Bearer {self.key}",
-                    "Content-Type": "application/json",
-                    "Prefer": "resolution=merge-duplicates,return=minimal",
-                },
-                data=json.dumps(chunk, default=str),
-                timeout=60,
-            )
-            if r.status_code not in (200, 201, 204):
-                raise RuntimeError(f"Supabase upsert {table} → {r.status_code}: {r.text[:500]}")
+
+            def _post(chunk: list[dict] = chunk) -> None:
+                r = requests.post(
+                    f"{self.url}/rest/v1/{table}?on_conflict={on_conflict}",
+                    headers={
+                        "apikey": self.key,
+                        "Authorization": f"Bearer {self.key}",
+                        "Content-Type": "application/json",
+                        "Prefer": "resolution=merge-duplicates,return=minimal",
+                    },
+                    data=json.dumps(chunk, default=str),
+                    timeout=60,
+                )
+                if r.status_code not in (200, 201, 204):
+                    raise RuntimeError(f"Supabase upsert {table} → {r.status_code}: {r.text[:500]}")
+
+            retry_call(_post, label=f"upsert {table}")
             total += len(chunk)
         return total
 
@@ -79,8 +84,10 @@ class Supabase:
 
 CAL_VSL = os.environ.get("GHL_CAL_VSL", "8ECqPVcPGz81JGlzCmoG")
 CAL_FOLLOW = os.environ.get("GHL_CAL_FOLLOW", "AQ8RmdYw7iyru79Axymf")
-CAL_BIENVENUE = os.environ.get("GHL_CAL_BIENVENUE", "BCghpu5fgGfkROyaQge5")
-CALENDARS = {"VSL": CAL_VSL, "Follow": CAL_FOLLOW, "Bienvenue": CAL_BIENVENUE}
+# Calendrier (1) — fourre-tout Léa : onboarding clients won + follow-ups + spillover R1.
+# Pas pur discovery → exclure du funnel VSL, garder pour visibilité opérationnelle.
+CAL_MIXTE = os.environ.get("GHL_CAL_MIXTE", "KgnExMZpdwOEkdQdAaGb")
+CALENDARS = {"VSL": CAL_VSL, "Follow": CAL_FOLLOW, "Mixte": CAL_MIXTE}
 
 SURVEY_VSL = os.environ.get("GHL_SURVEY_VSL", "QMdJpJZx7K7Tl1oWieVw")
 SURVEY_FIELDS = {
@@ -174,7 +181,8 @@ def compute_qualif(statut: str | None, quand: str | None, budget: str | None,
 
 
 def funnel_from_calendar(cal_label: str) -> str:
-    return {"VSL": "VSL", "Follow": "Follow", "Bienvenue": "Bienvenue"}.get(cal_label, "Other")
+    # Mixte = calendar (1) fourre-tout, pas pur funnel — laisser "Other" pour exclure des calculs VSL.
+    return {"VSL": "VSL", "Follow": "Follow"}.get(cal_label, "Other")
 
 
 def normalize_call_status(raw_status: str | None) -> str:
@@ -258,33 +266,39 @@ def contact_to_rows(c: dict, leads_by_id: dict[str, dict]) -> tuple[dict, list[d
     return contact_row, []
 
 
-def classify_funnel(source: str | None) -> str | None:
-    """Map GHL opportunity.source → 'VSL' | 'Setting' | None.
+def classify_funnel(source: str | None, attributions: list[dict] | None = None) -> tuple[str | None, str | None]:
+    """Map GHL opportunity → (funnel, setter_type).
 
-    VSL funnel (lead → Landing → opt-in → VSL → survey → call):
-      - 'Form Léa Optin', 'Form Léa', 'Form Lea' (form 1 sur landing)
-      - 'Survey VSL Lea' (survey post-VSL)
-      - 'VSL' (manuel)
-      - 'Appel de découverte - Gigi Academy (VSL)' (booking calendar VSL)
+    funnel ∈ {'VSL', 'Setting', None}
+    setter_type ∈ {'IA', 'humain', None} — uniquement renseigné pour funnel='Setting'
 
-    Setting funnel (DM IG → setteuse → call):
-      - 'Setting' (manuel par setteuse)
-      - 'Appel de découverte - Gigi Academy' (booking calendar Standard)
+    Orsay (agent IA en DM IG) = funnel 'Setting' + setter_type 'IA'.
     """
-    if not source:
-        return None
-    s = source.strip()
+    s = (source or "").strip()
     s_low = s.lower()
+
+    utm_mediums = {
+        (a.get("utmMedium") or "").lower()
+        for a in (attributions or [])
+        if a.get("utmMedium")
+    }
+    is_orsay = "orsay" in s_low or "orsay" in utm_mediums
+
     if (
-        "vsl" in s_low  # catches "VSL", "Survey VSL", "(VSL)"
+        "vsl" in s_low
         or s in ("Form Léa Optin", "Form Léa", "Form Lea")
         or "form léa" in s_low
         or "form lea" in s_low
     ):
-        return "VSL"
+        return "VSL", None
+
+    if is_orsay:
+        return "Setting", "IA"
+
     if "setting" in s_low or s == "Appel de découverte - Gigi Academy":
-        return "Setting"
-    return None
+        return "Setting", "humain"
+
+    return None, None
 
 
 def opportunity_to_row(o: dict, contact_index: dict[str, dict],
@@ -309,7 +323,7 @@ def opportunity_to_row(o: dict, contact_index: dict[str, dict],
 
     # source funnel: derived from GHL native opportunity.source field.
     # Mapping validated with Antoine 2026-05-08 — see feedback_lea_source_funnel.md.
-    source_funnel = classify_funnel(o.get("source"))
+    source_funnel, setter_type = classify_funnel(o.get("source"), o.get("attributions"))
 
     return {
         "opportunity_id": o.get("id"),
@@ -323,6 +337,7 @@ def opportunity_to_row(o: dict, contact_index: dict[str, dict],
         "is_won": won,
         "monetary_value": o.get("monetaryValue"),
         "source_funnel": source_funnel,
+        "setter_type": setter_type,
         "closer_id": o.get("assignedTo"),
         "contracted_at": contracted_at,
         "created_at": to_iso(o.get("createdAt")),

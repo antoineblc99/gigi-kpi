@@ -32,6 +32,7 @@ import requests
 from dotenv import load_dotenv
 
 from pipelines.lib.db import sb, upsert
+from pipelines.lib.retry import retry_call
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env.local")
@@ -183,7 +184,10 @@ def main() -> int:
         return 1
 
     # Append-only insert (snapshot per run for trend analysis)
-    sb().table("fact_calendar_capacity").insert(rows).execute()
+    retry_call(
+        lambda: sb().table("fact_calendar_capacity").insert(rows).execute(),
+        label="insert fact_calendar_capacity",
+    )
 
     # Quick summary print
     by_cal: dict[str, dict] = {}

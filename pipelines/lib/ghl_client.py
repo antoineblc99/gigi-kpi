@@ -5,6 +5,8 @@ from typing import Any, Iterator
 
 import requests
 
+from .retry import retry_call
+
 GHL_BASE = "https://services.leadconnectorhq.com"
 
 
@@ -29,7 +31,12 @@ class GHLClient:
         url = f"{GHL_BASE}{path}"
         headers = self._headers(version=version, json_body=json_body is not None)
         for attempt in range(5):
-            r = requests.request(method, url, headers=headers, params=params, json=json_body, timeout=60)
+            # retry_call absorbe les erreurs réseau transitoires (DNS, timeout, connexion coupée)
+            r = retry_call(
+                requests.request, method, url,
+                headers=headers, params=params, json=json_body, timeout=60,
+                label=f"GHL {method} {path}",
+            )
             if r.status_code == 200:
                 return r.json()
             if r.status_code in (429, 502, 503, 504):

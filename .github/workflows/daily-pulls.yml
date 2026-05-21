@@ -19,7 +19,8 @@ jobs:
       GHL_LOCATION_ID: ${{ secrets.GHL_LOCATION_ID }}
       GHL_CAL_VSL: ${{ secrets.GHL_CAL_VSL }}
       GHL_CAL_FOLLOW: ${{ secrets.GHL_CAL_FOLLOW }}
-      GHL_CAL_BIENVENUE: ${{ secrets.GHL_CAL_BIENVENUE }}
+      # GHL_CAL_MIXTE non passé volontairement : le code a le bon défaut
+      # (KgnExMZpdwOEkdQdAaGb). Passer un secret inexistant = "" = bug.
       GHL_SURVEY_VSL: ${{ secrets.GHL_SURVEY_VSL }}
       META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
       META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}

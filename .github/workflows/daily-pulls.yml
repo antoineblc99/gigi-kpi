@@ -28,6 +28,7 @@ jobs:
       META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
       META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
       META_API_VERSION: ${{ secrets.META_API_VERSION }}
+      VTURB_API_TOKEN: ${{ secrets.VTURB_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -56,3 +57,7 @@ jobs:
       - name: pull_fathom
         if: always()
         run: python pipelines/pull_fathom.py --days 14
+
+      - name: pull_vturb
+        if: always()
+        run: python pipelines/pull_vturb.py --days 14

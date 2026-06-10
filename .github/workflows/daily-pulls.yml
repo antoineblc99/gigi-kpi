@@ -52,3 +52,7 @@ jobs:
       - name: pull_calendar_capacity
         if: always()
         run: python pipelines/pull_calendar_capacity.py
+
+      - name: pull_fathom
+        if: always()
+        run: python pipelines/pull_fathom.py --days 14

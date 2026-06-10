@@ -1,0 +1,355 @@
+/* DA Gigi — variables extraites de recap-app/index.html */
+:root {
+  --bg: #faf8f5;
+  --ink: #1a1614;
+  --coral: #ff5a4d;
+  --coral-soft: #ffe8e5;
+  --espresso: #3d2f24;
+  --muted: #8a7d72;
+  --line: #e8e2db;
+  --green: #2d8659;
+  --green-soft: #e0f0e8;
+  --amber: #c97f1e;
+  --amber-soft: #faf0e0;
+  --card: #ffffff;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+}
+
+/* ---------- Header ---------- */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--coral);
+  margin-bottom: 6px;
+}
+h1 {
+  font-family: "Archivo Black", sans-serif;
+  font-size: clamp(26px, 5vw, 38px);
+  line-height: 1.05;
+  color: var(--espresso);
+}
+.header-date {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 17px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-top: 6px;
+}
+.health-badge .dot { width: 8px; height: 8px; border-radius: 50%; }
+.health-ok { background: var(--green-soft); color: var(--green); }
+.health-ok .dot { background: var(--green); }
+.health-warn { background: var(--amber-soft); color: var(--amber); }
+.health-warn .dot { background: var(--amber); }
+
+/* ---------- Brief du jour ---------- */
+.brief {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--coral);
+  border-radius: 12px;
+  padding: 20px 22px;
+  margin-bottom: 28px;
+}
+.brief .label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.brief p {
+  font-family: "Instrument Serif", serif;
+  font-size: 18px;
+  line-height: 1.45;
+  color: var(--espresso);
+}
+.brief p + p { margin-top: 8px; }
+
+/* ---------- Sections ---------- */
+h2 {
+  font-family: "Archivo Black", sans-serif;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--espresso);
+  margin: 36px 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+h2 .count {
+  font-family: "Inter", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ---------- Jauge palier ---------- */
+.gauge {
+  background: var(--espresso);
+  color: var(--bg);
+  border-radius: 16px;
+  padding: 28px 26px 24px;
+  margin-bottom: 28px;
+}
+.gauge .label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: rgba(250, 248, 245, 0.6);
+  margin-bottom: 10px;
+}
+.gauge .score {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.gauge .big {
+  font-family: "Instrument Serif", serif;
+  font-size: clamp(48px, 9vw, 72px);
+  line-height: 1;
+  color: #fff;
+}
+.gauge .vs {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 20px;
+  color: rgba(250, 248, 245, 0.65);
+}
+.gauge .bar {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(250, 248, 245, 0.15);
+  margin: 20px 0 10px;
+  overflow: hidden;
+}
+.gauge .bar .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--coral);
+  min-width: 4px;
+}
+.gauge .meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: rgba(250, 248, 245, 0.7);
+}
+.gauge .meta strong { color: #fff; font-weight: 600; }
+.gauge .paliers {
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  color: rgba(250, 248, 245, 0.5);
+}
+.gauge .paliers .current { color: var(--coral); font-weight: 600; }
+
+/* ---------- KPI cards ---------- */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.kpi {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+}
+.kpi .label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.kpi .value {
+  font-family: "Instrument Serif", serif;
+  font-size: 38px;
+  line-height: 1.05;
+  color: var(--espresso);
+}
+.kpi.v-good .value { color: var(--green); }
+.kpi.v-bad .value { color: var(--coral); }
+.kpi.v-warn .value { color: var(--amber); }
+.kpi .sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* ---------- Décisions ---------- */
+.decision {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+}
+.decision .top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.decision .title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--espresso);
+}
+.decision .impact {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.decision .impact strong { color: var(--ink); }
+.badge-whatsapp {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: 999px;
+  padding: 5px 11px;
+  white-space: nowrap;
+}
+.calm {
+  font-family: "Instrument Serif", serif;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--muted);
+  padding: 14px 2px;
+}
+
+/* ---------- Fil d'activité ---------- */
+.feed { list-style: none; }
+.feed li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.feed li:last-child { border-bottom: none; }
+.feed .icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.feed .icon.observer { background: var(--green-soft); }
+.feed .icon.optimiseur { background: var(--coral-soft); }
+.feed .icon.relanceur { background: var(--amber-soft); }
+.feed .icon.stratege { background: #ece6f7; }
+.feed .head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.feed .agent-name { font-weight: 600; font-size: 13px; color: var(--espresso); }
+.feed .agent-name.observer { color: var(--green); }
+.feed .agent-name.optimiseur { color: var(--coral); }
+.feed .agent-name.relanceur { color: var(--amber); }
+.feed .agent-name.stratege { color: #6b4fa0; }
+.feed .when { font-size: 12px; color: var(--muted); }
+.feed .status-pill {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.feed .status-pill.proposed { background: var(--amber-soft); color: var(--amber); }
+.feed .status-pill.approved { background: var(--green-soft); color: var(--green); }
+.feed .status-pill.executed { background: var(--green-soft); color: var(--green); }
+.feed .status-pill.rejected { background: var(--coral-soft); color: var(--coral); }
+.feed .what { font-size: 14px; color: var(--ink); margin-top: 2px; }
+.feed .what strong { font-weight: 600; }
+
+/* ---------- Footer ---------- */
+.footer {
+  margin-top: 44px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.footer .powered { letter-spacing: 0.3px; }
+.footer .powered strong { color: var(--espresso); font-weight: 600; }
+
+/* ---------- Erreur data ---------- */
+.data-error {
+  background: var(--coral-soft);
+  color: var(--espresso);
+  border-radius: 12px;
+  padding: 16px 18px;
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+/* ---------- Mobile (Léa / Antoine au tel, 390px) ---------- */
+@media (max-width: 720px) {
+  .container { padding: 24px 14px 40px; }
+  .kpis { grid-template-columns: 1fr; }
+  .gauge { padding: 22px 18px 20px; }
+  .brief p { font-size: 16px; }
+}

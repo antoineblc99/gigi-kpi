@@ -14,6 +14,9 @@ const EOD_SENTINEL_FILTER = `NOT (calls_planifies > 0 AND calls_planifies = call
 
 export const PALIER_1 = 30_000;
 export const PALIERS = [30_000, 60_000, 100_000];
+// Santé système — pipelines/pull_*.py (gigi-kpi) + détecteurs signals.ts (communicator-app)
+export const PIPELINES_COUNT = 10;
+export const SIGNALS_COUNT = 8;
 export const COLLECTION_RATE = 0.8; // strategy.md : ~80% du contracté finit collecté
 export const SHOW_RATE_TARGET = 70; // cible strategy.md
 export const SHOW_RATE_ALERT = 60; // seuil signal (signals.ts)

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Gigi Academy — Cockpit",
+  title: "Cockpit — Gigi Academy",
   description: "Cockpit AIOS Gigi Academy — Powered by Scale.IA",
   robots: { index: false, follow: false },
 };

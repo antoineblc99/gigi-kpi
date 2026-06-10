@@ -29,6 +29,7 @@ jobs:
       META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
       META_API_VERSION: ${{ secrets.META_API_VERSION }}
       VTURB_API_TOKEN: ${{ secrets.VTURB_API_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -61,3 +62,10 @@ jobs:
       - name: pull_vturb
         if: always()
         run: python pipelines/pull_vturb.py --days 14
+
+      - name: pull_creative_transcripts
+        if: always()
+        run: |
+          sudo apt-get install -y -q ffmpeg >/dev/null
+          pip install -q yt-dlp
+          python -m pipelines.pull_creative_transcripts --limit 20

@@ -52,6 +52,8 @@ export type DecisionRow = {
 
 export type AdWaste = { name: string; ad_id: string; spend: number; ventes: number };
 
+export type CallsTodayEntry = { label: string; calls: number };
+
 export type FeedEntry = {
   agent: "observer" | "optimiseur" | "relanceur" | "stratege";
   at: string; // ISO
@@ -72,6 +74,8 @@ export type CockpitData = {
   // décisions
   decisionsProposed: DecisionRow[];
   decisionsRecent: DecisionRow[];
+  // calls du jour (silence-si-vert : tableau vide → rien affiché)
+  callsToday: CallsTodayEntry[];
   // signaux & fraîcheur
   adsWaste: AdWaste[];
   freshestPull: string | null;
@@ -101,6 +105,7 @@ export async function getCockpitData(): Promise<CockpitData> {
     showRate7d: { recus: 0, planifies: 0, pct: null },
     decisionsProposed: [],
     decisionsRecent: [],
+    callsToday: [],
     adsWaste: [],
     freshestPull: null,
     attentionCount: 0,
@@ -109,7 +114,7 @@ export async function getCockpitData(): Promise<CockpitData> {
   };
 
   try {
-    const [mtdRows, cash30Rows, show7Rows, optinRows, decisionRows, freshRows, adsRows] =
+    const [mtdRows, cash30Rows, show7Rows, optinRows, decisionRows, freshRows, adsRows, callsTodayRows] =
       await Promise.all([
         // 1. Cash contracté mois courant (EOD, sentinel exclu)
         sql<{ contracte: number }>(`
@@ -183,6 +188,17 @@ export async function getCockpitData(): Promise<CockpitData> {
           WHERE COALESCE(sa.ventes, 0) = 0
           ORDER BY sp.sp DESC
         `),
+        // 8. Calls prévus aujourd'hui (Europe/Paris) par calendrier — fact_call,
+        //    status != cancelled (KPI Registry §calls), COUNT(DISTINCT lead_id)
+        sql<CallsTodayEntry>(`
+          SELECT calendar_label AS label, count(DISTINCT lead_id)::int AS calls
+          FROM fact_call
+          WHERE (scheduled_at AT TIME ZONE $$Europe/Paris$$)::date
+              = (now() AT TIME ZONE $$Europe/Paris$$)::date
+            AND status NOT IN ($$cancelled$$)
+          GROUP BY calendar_label
+          ORDER BY calls DESC
+        `),
       ]);
 
     const contracteMtd = Number(mtdRows[0]?.contracte ?? 0);
@@ -195,6 +211,7 @@ export async function getCockpitData(): Promise<CockpitData> {
     const decisionsProposed = decisionRows.filter((d) => d.status === "proposed");
     const freshestPull = freshRows[0]?.freshest ?? null;
     const adsWaste = adsRows;
+    const callsToday = callsTodayRows;
 
     // --- Jauge palier ---
     const collecteAttenduMtd = contracteMtd * COLLECTION_RATE;
@@ -294,8 +311,8 @@ export async function getCockpitData(): Promise<CockpitData> {
       feed.push({
         agent: agentKey(d.agent_name),
         at: d.created_at,
-        title: d.payload?.title || humanizeType(d.decision_type),
-        result: feedResult(d),
+        title: humanizeAdNames(d.payload?.title || humanizeType(d.decision_type)),
+        result: humanizeAdNames(feedResult(d)),
         status: d.status,
       });
     }
@@ -336,6 +353,7 @@ export async function getCockpitData(): Promise<CockpitData> {
       showRate7d: { recus, planifies, pct: showPct },
       decisionsProposed,
       decisionsRecent,
+      callsToday,
       adsWaste,
       freshestPull,
       attentionCount,
@@ -382,6 +400,20 @@ function feedResult(d: DecisionRow): string {
 
 export function shortAdName(name: string): string {
   return (name || "").replace(/^GIGI_(VSL|FOLLOW)_VIDEO_STORY_/, "");
+}
+
+// Remplace les noms d'ads bruts (GIGI_VSL_VIDEO_STORY_…) dans un texte libre
+// (titres/summaries de decision_log) — rendu uniquement, jamais la donnée.
+export function humanizeAdNames(text: string): string {
+  return (text || "").replace(/GIGI_(?:VSL|FOLLOW)_VIDEO_STORY_[A-Z0-9_-]+/g, (m) =>
+    shortAdName(m)
+  );
+}
+
+// Vocabulaire métier des calendriers (KPI Registry : Follow = calls de setting)
+export function calendarLabelFr(label: string): string {
+  if (label === "Follow") return "Setting";
+  return label || "Autre";
 }
 
 export function relHoursLabel(hours: number): string {

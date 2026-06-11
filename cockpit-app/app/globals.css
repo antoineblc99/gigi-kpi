@@ -132,6 +132,21 @@ h1 {
 }
 .brief p + p { margin-top: 8px; }
 
+/* ---------- Aujourd'hui (calls prévus — silence-si-vert) ---------- */
+.today {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -12px 0 24px;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 16px;
+  width: fit-content;
+}
+
 /* ---------- Sections ---------- */
 h2 {
   display: flex;

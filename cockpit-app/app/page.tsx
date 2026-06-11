@@ -4,6 +4,8 @@ import {
   relTime,
   relHoursLabel,
   humanizeType,
+  humanizeAdNames,
+  calendarLabelFr,
   PALIER_1,
   PALIERS,
   PIPELINES_COUNT,
@@ -118,7 +120,7 @@ export default async function Home() {
     const d = data.decisionsRecent.find((row) => agentOf(row.agent_name) === key);
     if (!d) return null;
     return {
-      text: d.payload?.title || humanizeType(d.decision_type),
+      text: humanizeAdNames(d.payload?.title || humanizeType(d.decision_type)),
       when: relTime(d.created_at, now),
     };
   };
@@ -157,6 +159,22 @@ export default async function Home() {
             <p key={i}>{line}</p>
           ))}
         </section>
+      )}
+
+      {/* 2bis. Aujourd'hui — calls prévus (silence-si-vert : rien si 0) */}
+      {data.callsToday.length > 0 && (
+        <div className="today" title="fact_call.scheduled_at = aujourd'hui (Europe/Paris), status != cancelled">
+          <span aria-hidden>📅</span>
+          <span>
+            {(() => {
+              const total = data.callsToday.reduce((s, c) => s + c.calls, 0);
+              const detail = data.callsToday
+                .map((c) => `${c.calls} ${calendarLabelFr(c.label)}`)
+                .join(", ");
+              return `${total} call${total > 1 ? "s" : ""} aujourd'hui (${detail})`;
+            })()}
+          </span>
+        </div>
       )}
 
       {/* 3. Jauge palier — ring + barre + projection fantôme + cascade 30k → 60k → 100k */}
@@ -244,14 +262,16 @@ export default async function Home() {
         data.decisionsProposed.map((d) => (
           <article key={d.id} className="decision">
             <div className="top">
-              <div className="title">{d.payload?.title || humanizeType(d.decision_type)}</div>
+              <div className="title">
+                {humanizeAdNames(d.payload?.title || humanizeType(d.decision_type))}
+              </div>
               {!operator && <span className="badge-whatsapp">À valider · WhatsApp</span>}
             </div>
             <div className="impact">
               <strong className={`agent-ink ${agentOf(d.agent_name)}`}>
                 {AGENT_NAME[agentOf(d.agent_name)]}
               </strong>{" "}
-              · {decisionImpact(d)} · {relTime(d.created_at, now)}
+              · {humanizeAdNames(decisionImpact(d))} · {relTime(d.created_at, now)}
             </div>
             {operator && (
               <div className="op-actions">

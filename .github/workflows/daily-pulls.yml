@@ -66,7 +66,8 @@ jobs:
       - name: pull_creative_transcripts
         if: always()
         run: |
-          sudo apt-get install -y -q ffmpeg >/dev/null
+          # ffmpeg requis seulement pour les vidéos >24MB — apt flaky ne doit pas faire échouer le step
+          (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg) >/dev/null 2>&1 || echo "WARN ffmpeg install failed (gros fichiers skippés)"
           pip install -q yt-dlp
           python -m pipelines.pull_creative_transcripts --limit 20
 

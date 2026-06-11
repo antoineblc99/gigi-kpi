@@ -126,6 +126,19 @@ def signaux() -> tuple[list[str], bool]:
     return lines, any_red
 
 
+def touchpoint_lea() -> str | None:
+    """Dernier contact Léa (client_touchpoints) — ligne seulement si > 7 jours."""
+    rows = q("""
+        SELECT EXTRACT(day FROM now() - max(touched_at))::int AS jours
+        FROM client_touchpoints
+        WHERE client_slug = 'lea'
+    """)
+    jours = rows[0].get("jours") if rows else None
+    if jours is None or jours <= 7:
+        return None
+    return f"🤝 Dernier contact Léa : il y a {jours} j — un message/point s'impose (Mahdy)"
+
+
 def decisions_en_attente() -> list[dict]:
     """Décisions proposed des 14 derniers jours (les anomalies de mai restent hors brief)."""
     return q("""
@@ -186,11 +199,14 @@ def compose() -> str:
     pending = decisions_en_attente()
     executed = executions_veille()
     n_manual = executions_manuelles()
+    tp = touchpoint_lea()
 
     badge = "🔴" if any_red else ("🟡" if sig_lines or pending or n_manual else "🟢")
     lines = [f"{badge} Gigi — brief du {date_str}", hier]
 
     lines.extend(sig_lines)
+    if tp:
+        lines.append(tp)
     if n_manual:
         lines.append(f"⚠️ {n_manual} pause(s) ad à exécuter MANUELLEMENT (token Meta KO) — voir cockpit")
 
@@ -209,7 +225,7 @@ def compose() -> str:
         )
         lines.append(f"✅ Exécuté hier : {names}")
 
-    if not sig_lines and not pending and not executed and not n_manual:
+    if not sig_lines and not pending and not executed and not n_manual and not tp:
         lines.append("RAS — rien à signaler, rien à valider.")
 
     return "\n".join(lines[:12])

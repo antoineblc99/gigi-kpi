@@ -4,3 +4,4 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 supabase==2.29.0
 pydantic==2.13.4
+anthropic>=0.69

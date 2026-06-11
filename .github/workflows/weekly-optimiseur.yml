@@ -1,0 +1,32 @@
+name: weekly-optimiseur
+
+on:
+  schedule:
+    # Lundi 06:00 UTC — l'Optimiseur propose (pause_ad), le juge filtre, validation humaine ensuite.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  optimiseur:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+      SUPABASE_PROJECT_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+      META_AD_ACCOUNT_ID: ${{ secrets.META_AD_ACCOUNT_ID }}
+      META_API_VERSION: ${{ secrets.META_API_VERSION }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: agent_optimiseur
+        run: python -m pipelines.agent_optimiseur

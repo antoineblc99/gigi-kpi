@@ -69,3 +69,13 @@ jobs:
           sudo apt-get install -y -q ffmpeg >/dev/null
           pip install -q yt-dlp
           python -m pipelines.pull_creative_transcripts --limit 20
+
+      # --- Agents M1 (propose-only sauf exécutant qui n'agit que sur approved) ---
+
+      - name: agent_relanceur
+        if: always()
+        run: python -m pipelines.agent_relanceur
+
+      - name: execute_decisions
+        if: always()
+        run: python -m pipelines.execute_decisions

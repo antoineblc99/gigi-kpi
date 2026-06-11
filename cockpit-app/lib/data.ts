@@ -8,7 +8,7 @@
 import { sql } from "./sql";
 
 // Filtre sentinel EOD — copie exacte de communicator-app/lib/signals.ts
-const EOD_SENTINEL_FILTER = `NOT (calls_planifies > 0 AND calls_planifies = calls_recus
+export const EOD_SENTINEL_FILTER = `NOT (calls_planifies > 0 AND calls_planifies = calls_recus
   AND calls_planifies = ventes_setting AND calls_planifies = ventes_vsl
   AND calls_planifies::numeric = cash_contracte)`;
 

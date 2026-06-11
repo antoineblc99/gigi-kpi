@@ -15,6 +15,7 @@ import {
   type Verdict,
 } from "@/lib/data";
 import { isOperator } from "@/lib/op";
+import { computeRoiLedger, type RoiLedger } from "@/lib/roi";
 import { decideAction } from "./actions";
 
 // cookies() (mode opérateur) rend la page dynamique ; les fetchs data gardent
@@ -90,6 +91,15 @@ export default async function Home() {
   const operator = await isOperator();
   const data = await getCockpitData();
   const now = new Date(data.generatedAt);
+  // ROI Ledger — bloc opérateur uniquement, calculé depuis les facts (jamais déclaré)
+  let roi: RoiLedger | null = null;
+  if (operator) {
+    try {
+      roi = await computeRoiLedger(now);
+    } catch {
+      roi = null; // le ledger ne doit jamais faire tomber la page
+    }
+  }
 
   const dateLabel = new Intl.DateTimeFormat("fr-FR", {
     weekday: "long",
@@ -135,6 +145,14 @@ export default async function Home() {
           <div className="header-date">
             {dateLabel}
             {operator && <span className="badge-op">mode opérateur</span>}
+            {operator && (
+              <>
+                {" "}
+                <a className="vc-link" href="/vue-client">
+                  Vue client →
+                </a>
+              </>
+            )}
           </div>
         </div>
         <span className={`health-badge ${healthy ? "health-ok" : "health-warn"}`}>
@@ -231,6 +249,56 @@ export default async function Home() {
           })}
         </div>
       </section>
+
+      {/* 3bis. Valeur générée — ROI Ledger (mode opérateur uniquement) */}
+      {operator && roi && (
+        <section
+          className="roi"
+          title="decision_log exécutées, vérifiées dans fact_ad_daily / fact_call / fact_sale"
+        >
+          <div className="roi-top">
+            <div className="label">💰 Valeur générée</div>
+            <span className="roi-note">mesurée dans les données, jamais déclarée</span>
+          </div>
+          <div className="roi-total">
+            <span className="roi-big">{formatEur(roi.measured_eur)}</span>
+            <span className="roi-unit">mesurés à date</span>
+          </div>
+          {roi.measured_eur === 0 && (
+            <div className="roi-first">Premier mois de mesure en cours.</div>
+          )}
+          {roi.items.filter((i) => i.kind === "measured").length > 0 && (
+            <ul className="roi-items">
+              {roi.items
+                .filter((i) => i.kind === "measured")
+                .map((i, idx) => (
+                  <li key={idx}>
+                    <span className="roi-date">
+                      {new Intl.DateTimeFormat("fr-FR", {
+                        day: "numeric",
+                        month: "short",
+                        timeZone: "Europe/Paris",
+                      }).format(new Date(i.date))}
+                    </span>
+                    <span className="roi-detail">
+                      <strong className={`agent-ink ${agentOf(i.agent)}`}>{i.action}</strong> ·{" "}
+                      {humanizeAdNames(i.detail)}
+                    </span>
+                    <span className="roi-value">
+                      {i.value_eur !== undefined ? formatEur(i.value_eur) : i.metric}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )}
+          {roi.estimated_monthly_eur > 0 && (
+            <div className="roi-estimated">
+              Estimé (non compté dans le total) : ~{formatEur(roi.estimated_monthly_eur)}/mois si
+              les pauses tiennent — projection, pas une mesure.
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 4. KPI cards */}
       <div className="kpis">
